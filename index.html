@@ -621,10 +621,8 @@ function parseDateToken(str, dateScope){
 }
 
 function formatDateOut(d, hasTime){
-  var WD = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-  var s = d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
-  if(hasTime){ s += ' ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes()) + ':' + pad2(d.getSeconds()); }
-  s += ' (' + WD[d.getDay()] + ')';
+  var s = d.getFullYear() + '/' + pad2(d.getMonth() + 1) + '/' + pad2(d.getDate());
+  if(hasTime){ s += '/' + pad2(d.getHours()) + ':' + pad2(d.getMinutes()) + ':' + pad2(d.getSeconds()); }
   return s;
 }
 
@@ -676,7 +674,8 @@ function tryDateArithmetic(exprText, dateScope){
   var base = parseDateToken(m[1], dateScope);
   if(!base){ return null; }
   var rest = m[2] || '';
-  var hasTime = /:/.test(m[1]);
+  var hasTime = /:/.test(m[1]) || /^now$/i.test(m[1].trim()) ||
+    (base.getHours() !== 0 || base.getMinutes() !== 0 || base.getSeconds() !== 0);
   if(!rest.trim()){
     return { date: new Date(base.getTime()), hasTime: hasTime };
   }
@@ -1520,7 +1519,7 @@ npInput.addEventListener('keydown', function(e){
       npSuggestState.highlightIndex = (npSuggestState.highlightIndex - 1 + npSuggestState.matches.length) % npSuggestState.matches.length;
       renderSuggestList(); return;
     }
-    if((e.key === ' ' || e.key === 'Enter' || e.key === 'Tab') && npSuggestState.matches.length){
+    if((e.key === 'Enter' || e.key === 'Tab') && npSuggestState.matches.length){
       e.preventDefault(); applySuggestion(npSuggestState.highlightIndex); return;
     }
     if(e.key === 'Escape'){ e.preventDefault(); hideSuggestions(); return; }
