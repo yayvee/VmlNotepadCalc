@@ -1,0 +1,1492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Notepad Calculator</title>
+<meta name="theme-color" content="#3C3489" />
+<style>
+  :root{
+    --bg: #F7F7F5;
+    --card: #FFFFFF;
+    --surface-1: #F0EFEA;
+    --border: #E3E1D9;
+    --text-primary: #1C1C1A;
+    --text-secondary: #5F5E5A;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg: #17171A;
+      --card: #232326;
+      --surface-1: #2B2B2F;
+      --border: #35353A;
+      --text-primary: #F1F0EC;
+      --text-secondary: #B4B2A9;
+    }
+  }
+  *{ box-sizing: border-box; }
+  html, body{ height: 100%; margin: 0; }
+  body{
+    display: flex; flex-direction: column;
+    font-family: var(--font); background: var(--bg); color: var(--text-primary);
+    -webkit-tap-highlight-color: transparent;
+  }
+  header{
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 16px 20px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+  }
+  h1{ font-size: 18px; font-weight: 700; margin: 0; }
+  .top-row{ flex: 1; min-width: 0; }
+  #npClear, #npExport, #npImportBtn, #npCsvBtn, #npThesaurus, #npSpelling, #npAutoCorrect, #npFontDown, #npFontUp{
+    height: 34px; padding: 0 14px; font-size: 13px; font-weight: 700; font-family: var(--font);
+    border-radius: 8px; border: 1px solid var(--border); background: var(--card); color: var(--text-primary);
+    cursor: pointer; flex-shrink: 0; margin-left: 8px;
+  }
+  #npFontDown, #npFontUp{ padding: 0 10px; }
+  #npClear:active, #npExport:active, #npImportBtn:active, #npCsvBtn:active, #npThesaurus:active, #npSpelling:active, #npAutoCorrect:active, #npFontDown:active, #npFontUp:active{ transform: scale(0.97); }
+  #npAutoCorrect.on{ background: var(--accent, #3C3489); border-color: var(--accent, #3C3489); color: #fff; }
+  #npAutoCorrect.off{ background: var(--card); color: var(--text-secondary); border-style: dashed; }
+  #npSavedStatus{ font-size: 12px; font-weight: 700; color: var(--text-secondary); margin-right: 10px; white-space: nowrap; }
+  .status-row{ display:flex; align-items:center; flex-shrink:0; }
+  #npCsvNav{ margin-top: 8px; gap: 8px; }
+  #npCsvPrev, #npCsvNext{
+    height: 30px; width: 34px; font-size: 14px; font-weight: 700; font-family: var(--font);
+    border-radius: 8px; border: 1px solid var(--border); background: var(--card); color: var(--text-primary);
+    cursor: pointer; flex-shrink: 0;
+  }
+  #npCsvPrev:active, #npCsvNext:active{ transform: scale(0.97); }
+  #npCsvSelect{
+    height: 30px; padding: 0 8px; font-size: 13px; font-weight: 600; font-family: var(--font);
+    border-radius: 8px; border: 1px solid var(--border); background: var(--card); color: var(--text-primary);
+    cursor: pointer; max-width: 220px;
+  }
+  #npCsvCount{ font-size: 12px; font-weight: 700; color: var(--text-secondary); margin-left: 4px; white-space: nowrap; }
+  #npCsvResetLinks{
+    height: 30px; padding: 0 12px; font-size: 12px; font-weight: 700; font-family: var(--font);
+    border-radius: 8px; border: 1px solid var(--border); background: var(--card); color: var(--text-primary);
+    cursor: pointer; flex-shrink: 0; margin-left: 8px;
+  }
+  #npCsvResetLinks:active{ transform: scale(0.97); }
+
+  main{ flex: 1; display: flex; min-height: 0; }
+
+  #npInputWrap{ position: relative; flex: 1; min-width: 0; }
+  #npGutter{
+    flex-shrink: 0; width: 44px; overflow: hidden;
+    padding: 18px 0; text-align: right;
+    background: var(--card); border-right: 1px solid var(--border);
+    font-family: var(--font-mono); font-size: var(--np-font-size, 16px); line-height: var(--np-line-height, 30px);
+    color: var(--text-secondary); opacity: 0.45; user-select: none;
+  }
+  #npGutter div{ padding-right: 10px; }
+
+  textarea, #npOverlay{
+    font-family: var(--font-mono); font-size: var(--np-font-size, 16px); font-weight: 700; line-height: var(--np-line-height, 30px);
+  }
+  #npInput{
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    padding: 18px 20px; border: none;
+    background: var(--card); color: var(--text-primary); resize: none; outline: none;
+    overflow: auto; white-space: pre;
+  }
+  #npOverlay{
+    position: absolute; inset: 0;
+    padding: 18px 20px;
+    color: var(--text-secondary);
+    white-space: pre;
+    pointer-events: none;
+    overflow: hidden;
+  }
+  #npOverlay .ov-line{ height: var(--np-line-height, 30px); }
+  #npOverlay .ov-ghost{ color: transparent; }
+  #npOverlay .ov-result{ color: var(--text-secondary); }
+  #npOverlay .ov-result.has-value{
+    pointer-events: auto; cursor: pointer; border-radius: 4px;
+    text-decoration: underline dashed; text-decoration-color: var(--border); text-underline-offset: 3px;
+  }
+  #npOverlay .ov-result.has-value:hover{ background: var(--surface-1); }
+  #npOverlay .ov-result.ov-copied{ background: var(--surface-1); text-decoration: none; }
+  #npOverlay .ov-timestamp{
+    color: rgba(0, 229, 255, 0.25);
+    text-shadow: 0 0 6px rgba(0, 229, 255, 0.16), 0 0 12px rgba(0, 229, 255, 0.09);
+    font-weight: 700;
+    pointer-events: none;
+    user-select: none;
+  }
+  @keyframes ov-ts-blink{
+    0%, 49%{ opacity: 1; }
+    50%, 99%{ opacity: 0; }
+    100%{ opacity: 1; }
+  }
+  #npOverlay .ov-timestamp.ov-ts-flash{
+    animation: ov-ts-blink 0.333s linear 3;
+    animation-fill-mode: forwards;
+  }
+  #npOverlay .ov-link-chip, #npOverlay .ov-web-link{
+    display: inline-block; pointer-events: auto; cursor: pointer;
+    font-size: 11px; font-weight: 700; font-family: var(--font);
+    padding: 1px 7px; margin-left: 6px; border-radius: 10px;
+    border: 1px solid var(--border); color: var(--text-secondary);
+    background: var(--surface-1); vertical-align: middle;
+    text-decoration: none;
+  }
+  #npOverlay .ov-web-link{
+    color: #1a73e8; border-color: rgba(26, 115, 232, 0.4); background: rgba(26, 115, 232, 0.1);
+  }
+  #npOverlay .ov-web-link:hover{ filter: brightness(1.15); text-decoration: underline; }
+  #npOverlay .ov-link-chip.linked{
+    color: #ffb400; border-color: rgba(255, 180, 0, 0.5); background: rgba(255, 180, 0, 0.1);
+  }
+  #npOverlay .ov-link-chip:hover{ filter: brightness(1.15); }
+
+  #npSuggest{
+    position: fixed; display: none; z-index: 50;
+    min-width: 120px; max-width: 260px; max-height: 220px; overflow-y: auto;
+    background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.18);
+    font-family: var(--font-mono); font-size: 14px; font-weight: 700;
+    padding: 4px;
+  }
+  #npSuggest .np-sugg-item{
+    padding: 6px 10px; border-radius: 6px; cursor: pointer; color: var(--text-primary);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  #npSuggest .np-sugg-item.active{ background: var(--surface-1); }
+  #npSuggest .np-sugg-item.disabled{ color: var(--text-secondary); cursor: default; opacity: 0.7; }
+
+  @media (max-width: 560px){
+    #npInput, #npOverlay{ padding: 18px 12px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="top-row">
+    <h1>Vml's Notepad calculator</h1>
+  </div>
+  <div class="status-row">
+    <span id="npSavedStatus"></span>
+    <button id="npFontDown" aria-label="Decrease font size">A-</button>
+    <button id="npFontUp" aria-label="Increase font size">A+</button>
+    <button id="npExport">Export</button>
+    <button id="npImportBtn">Import</button>
+    <input type="file" id="npImportFile" accept=".txt,text/plain" style="display:none;" />
+    <button id="npCsvBtn">Import CSV</button>
+    <input type="file" id="npCsvFile" accept=".csv,text/csv" style="display:none;" />
+    <button id="npThesaurus" title="Select a word (or click into one), then click here for synonyms">Thesaurus</button>
+    <button id="npSpelling" title="Select a word or phrase, then click here for spelling suggestions">Spelling</button>
+    <button id="npAutoCorrect" title="Toggle silent auto-correction of misspelled words as you type">Auto-correct: On</button>
+    <button id="npClear">Clear</button>
+  </div>
+  <div class="status-row" id="npCsvNav" style="display:none;">
+    <button id="npCsvPrev" aria-label="Previous record">&#8592;</button>
+    <select id="npCsvSelect"></select>
+    <button id="npCsvNext" aria-label="Next record">&#8594;</button>
+    <span id="npCsvCount"></span>
+    <button id="npCsvResetLinks" title="Unlink every line from its CSV column">Reset Links</button>
+  </div>
+</header>
+<main>
+  <div id="npGutter"></div>
+  <div id="npInputWrap">
+    <textarea id="npInput" spellcheck="true" wrap="off"></textarea>
+    <div id="npOverlay" aria-hidden="true"></div>
+  </div>
+</main>
+<div id="npSuggest"></div>
+
+<script>
+var npInput = document.getElementById('npInput');
+var npOverlay = document.getElementById('npOverlay');
+var npGutter = document.getElementById('npGutter');
+var npSavedStatus = document.getElementById('npSavedStatus');
+var NP_STORAGE_KEY = 'notepad-calculator-fullpage-v1';
+var npDefaultText = "";
+
+var npSavedText = null;
+try{ npSavedText = localStorage.getItem(NP_STORAGE_KEY); }catch(e){ npSavedText = null; }
+npInput.value = (npSavedText !== null && npSavedText !== '') ? npSavedText : npDefaultText;
+
+var NP_TS_KEY = 'notepad-calculator-fullpage-timestamps-v1';
+var npLineTimestamps = [];
+try{
+  var storedTs = localStorage.getItem(NP_TS_KEY);
+  npLineTimestamps = storedTs ? JSON.parse(storedTs) : [];
+}catch(e){ npLineTimestamps = []; }
+
+function pad2(n){ return (n < 10 ? '0' : '') + n; }
+function formatNpTimestamp(d){
+  return d.getFullYear() + '/' + pad2(d.getMonth() + 1) + '/' + pad2(d.getDate()) +
+    '/' + pad2(d.getHours()) + ':' + pad2(d.getMinutes()) + ':' + pad2(d.getSeconds());
+}
+var npTsSaveTimer = null;
+function npScheduleTsSave(){
+  clearTimeout(npTsSaveTimer);
+  npTsSaveTimer = setTimeout(function(){
+    try{ localStorage.setItem(NP_TS_KEY, JSON.stringify(npLineTimestamps)); }catch(e){}
+  }, 300);
+}
+
+var npFlashLines = {};
+var npLastFinalizedText = npInput.value.split('\n').map(function(l){ return l.trim(); });
+var npFinalizeTimer = null;
+var NP_FINALIZE_DELAY = 600;
+var NP_FLASH_DURATION = 999;
+
+function scheduleFinalizeCheck(){
+  clearTimeout(npFinalizeTimer);
+  npFinalizeTimer = setTimeout(finalizeEditedLines, NP_FINALIZE_DELAY);
+}
+
+function finalizeEditedLines(){
+  var lines = npInput.value.split('\n');
+  var changed = false;
+  lines.forEach(function(rawLine, i){
+    var trimmed = rawLine.trim();
+    if(trimmed && npLastFinalizedText[i] !== trimmed){
+      npFlashLines[i] = true;
+      npLastFinalizedText[i] = trimmed;
+      changed = true;
+    }
+  });
+  npLastFinalizedText.length = lines.length;
+  if(changed){
+    renderNotepad();
+    setTimeout(function(){
+      npFlashLines = {};
+      renderNotepad();
+    }, NP_FLASH_DURATION);
+  }
+}
+
+// CSV Sync
+var NP_CSV_KEY = 'notepad-calculator-fullpage-csv-v1';
+var NP_CSV_LINKS_KEY = 'notepad-calculator-fullpage-csvlinks-v1';
+var npCsvHeaders = [];
+var npCsvRows = [];
+var npCsvIdColumn = null;
+var npCsvIndex = 0;
+var npLineLinks = {};
+
+try{
+  var storedCsv = localStorage.getItem(NP_CSV_KEY);
+  if(storedCsv){
+    var parsedCsv = JSON.parse(storedCsv);
+    npCsvHeaders = parsedCsv.headers || [];
+    npCsvRows = parsedCsv.rows || [];
+    npCsvIdColumn = parsedCsv.idColumn || null;
+    npCsvIndex = parsedCsv.index || 0;
+  }
+}catch(e){}
+try{
+  var storedLinks = localStorage.getItem(NP_CSV_LINKS_KEY);
+  npLineLinks = storedLinks ? JSON.parse(storedLinks) : {};
+}catch(e){ npLineLinks = {}; }
+
+function npScheduleCsvSave(){
+  try{
+    localStorage.setItem(NP_CSV_KEY, JSON.stringify({
+      headers: npCsvHeaders, rows: npCsvRows, idColumn: npCsvIdColumn, index: npCsvIndex
+    }));
+  }catch(e){}
+}
+function npScheduleCsvLinksSave(){
+  try{ localStorage.setItem(NP_CSV_LINKS_KEY, JSON.stringify(npLineLinks)); }catch(e){}
+}
+
+function parseCSV(text){
+  var lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n').filter(function(l){ return l.length > 0; });
+  function parseLine(line){
+    var fields = [];
+    var cur = '';
+    var inQuotes = false;
+    for(var i = 0; i < line.length; i++){
+      var ch = line[i];
+      if(inQuotes){
+        if(ch === '"'){
+          if(line[i + 1] === '"'){ cur += '"'; i++; }
+          else { inQuotes = false; }
+        } else { cur += ch; }
+      } else {
+        if(ch === '"'){ inQuotes = true; }
+        else if(ch === ','){ fields.push(cur); cur = ''; }
+        else { cur += ch; }
+      }
+    }
+    fields.push(cur);
+    return fields.map(function(f){ return f.trim(); });
+  }
+  if(!lines.length){ return { headers: [], rows: [] }; }
+  var headers = parseLine(lines[0]);
+  var rows = lines.slice(1).map(function(line){
+    var fields = parseLine(line);
+    var row = {};
+    headers.forEach(function(h, i){ row[h] = fields[i] !== undefined ? fields[i] : ''; });
+    return row;
+  });
+  return { headers: headers, rows: rows };
+}
+
+function applyCsvRecordToText(record){
+  if(!record){ return; }
+  var lines = npInput.value.split('\n');
+  var changed = false;
+  var newLines = lines.map(function(line, i){
+    var m = line.match(/^(\s*)([A-Za-z_][A-Za-z0-9_]*)(\s*)=(\s*)(.*)$/);
+    if(m){
+      var varName = m[2];
+      var col = npLineLinks['var:' + varName];
+      if(col && Object.prototype.hasOwnProperty.call(record, col)){
+        var rebuilt = m[1] + varName + m[3] + '=' + m[4] + record[col];
+        if(rebuilt !== line){ changed = true; }
+        return rebuilt;
+      }
+      return line;
+    }
+    if(line.trim()){
+      var lineCol = npLineLinks['line:' + i];
+      if(lineCol && Object.prototype.hasOwnProperty.call(record, lineCol)){
+        var indentMatch = line.match(/^(\s*)/);
+        var rebuiltBare = indentMatch[1] + record[lineCol];
+        if(rebuiltBare !== line){ changed = true; }
+        return rebuiltBare;
+      }
+    }
+    return line;
+  });
+  if(changed){
+    npInput.value = newLines.join('\n');
+    renderNotepad();
+    finalizeEditedLines();
+    npScheduleSave();
+  }
+}
+
+function npCsvRecordLabel(row, index){
+  var idVal = (npCsvIdColumn && row[npCsvIdColumn] !== undefined && row[npCsvIdColumn] !== '')
+    ? row[npCsvIdColumn] : ('Row ' + (index + 1));
+  return idVal;
+}
+
+function refreshCsvNav(){
+  var navEl = document.getElementById('npCsvNav');
+  var selectEl = document.getElementById('npCsvSelect');
+  var countEl = document.getElementById('npCsvCount');
+  if(!npCsvRows.length){
+    navEl.style.display = 'none';
+    return;
+  }
+  navEl.style.display = 'flex';
+  selectEl.innerHTML = npCsvRows.map(function(row, i){
+    return '<option value="' + i + '">' + escapeHtml(npCsvRecordLabel(row, i)) + '</option>';
+  }).join('');
+  if(npCsvIndex >= npCsvRows.length){ npCsvIndex = 0; }
+  selectEl.value = String(npCsvIndex);
+  countEl.textContent = (npCsvIndex + 1) + ' / ' + npCsvRows.length;
+}
+
+function goToCsvRecord(index){
+  if(!npCsvRows.length){ return; }
+  npCsvIndex = ((index % npCsvRows.length) + npCsvRows.length) % npCsvRows.length;
+  applyCsvRecordToText(npCsvRows[npCsvIndex]);
+  refreshCsvNav();
+  npScheduleCsvSave();
+}
+
+// Built-ins & Constants
+var NP_BUILTINS = {
+  pi: Math.PI, e: Math.E, sqrt: Math.sqrt, cbrt: Math.cbrt, abs: Math.abs,
+  ln: Math.log, log: Math.log10, log2: Math.log2, exp: Math.exp, round: Math.round,
+  floor: Math.floor, ceil: Math.ceil, min: Math.min, max: Math.max,
+  mod: function(a, b){ return a % b; },
+  fact: function(n){
+    n = Math.round(n); if(n < 0){ return NaN; }
+    var r = 1; for(var i = 2; i <= n; i++){ r *= i; } return r;
+  },
+  sin: function(deg){ return Math.sin(deg * Math.PI / 180); },
+  cos: function(deg){ return Math.cos(deg * Math.PI / 180); },
+  tan: function(deg){ return Math.tan(deg * Math.PI / 180); },
+  asin: function(x){ return Math.asin(x) * 180 / Math.PI; },
+  acos: function(x){ return Math.acos(x) * 180 / Math.PI; },
+  atan: function(x){ return Math.atan(x) * 180 / Math.PI; }
+};
+
+// --- CURRENCY EXCHANGE & UNIT CONVERSION ENGINES ---
+var npCurrencyRates = {
+  USD: 1, EUR: 0.92, GBP: 0.79, INR: 83.5, JPY: 155.0, CAD: 1.36, AUD: 1.51,
+  CHF: 0.90, CNY: 7.23, AED: 3.67, SAR: 3.75, SGD: 1.35, NZD: 1.64, BRL: 5.15,
+  RUB: 91.5, KRW: 1360.0, MXN: 16.8, ZAR: 18.4, THB: 36.5, MYR: 4.72, IDR: 16000,
+  PHP: 57.5, PKR: 278.0, BDT: 117.0, TRY: 32.2, SEK: 10.8, NOK: 10.9, DKK: 6.9,
+  PLN: 3.95, HKD: 7.82, TWD: 32.3, ILS: 3.7, EGP: 47.2, KWD: 0.31, OMR: 0.38, QAR: 3.64
+};
+
+function fetchLiveCurrencyRates(){
+  fetch('https://open.er-api.com/v6/latest/USD')
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      if(data && data.rates){
+        Object.assign(npCurrencyRates, data.rates);
+        renderNotepad();
+      }
+    }).catch(function(){});
+}
+fetchLiveCurrencyRates();
+
+var CURRENCY_SYMBOLS = {
+  '$': 'USD', '€': 'EUR', '£': 'GBP', '₹': 'INR', '¥': 'JPY', 'c$': 'CAD', 'a$': 'AUD'
+};
+
+var NP_UNITS = {
+  // Length (Base: m)
+  m: { cat: 'len', r: 1 }, meter: { cat: 'len', r: 1 }, meters: { cat: 'len', r: 1 },
+  km: { cat: 'len', r: 1000 }, kilometer: { cat: 'len', r: 1000 }, kilometers: { cat: 'len', r: 1000 },
+  cm: { cat: 'len', r: 0.01 }, centimeter: { cat: 'len', r: 0.01 }, centimeters: { cat: 'len', r: 0.01 },
+  mm: { cat: 'len', r: 0.001 }, millimeter: { cat: 'len', r: 0.001 }, millimeters: { cat: 'len', r: 0.001 },
+  um: { cat: 'len', r: 1e-6 }, micrometer: { cat: 'len', r: 1e-6 },
+  nm: { cat: 'len', r: 1e-9 }, nanometer: { cat: 'len', r: 1e-9 },
+  in: { cat: 'len', r: 0.0254 }, inch: { cat: 'len', r: 0.0254 }, inches: { cat: 'len', r: 0.0254 },
+  ft: { cat: 'len', r: 0.3048 }, foot: { cat: 'len', r: 0.3048 }, feet: { cat: 'len', r: 0.3048 },
+  yd: { cat: 'len', r: 0.9144 }, yard: { cat: 'len', r: 0.9144 }, yards: { cat: 'len', r: 0.9144 },
+  mi: { cat: 'len', r: 1609.344 }, mile: { cat: 'len', r: 1609.344 }, miles: { cat: 'len', r: 1609.344 },
+  nmi: { cat: 'len', r: 1852 }, nauticalmile: { cat: 'len', r: 1852 },
+  fathom: { cat: 'len', r: 1.8288 }, fathoms: { cat: 'len', r: 1.8288 },
+  furlong: { cat: 'len', r: 201.168 }, furlongs: { cat: 'len', r: 201.168 },
+
+  // Mass / Weight (Base: kg)
+  kg: { cat: 'mass', r: 1 }, kilogram: { cat: 'mass', r: 1 }, kilograms: { cat: 'mass', r: 1 },
+  g: { cat: 'mass', r: 0.001 }, gram: { cat: 'mass', r: 0.001 }, grams: { cat: 'mass', r: 0.001 },
+  mg: { cat: 'mass', r: 1e-6 }, milligram: { cat: 'mass', r: 1e-6 },
+  mcg: { cat: 'mass', r: 1e-9 }, microgram: { cat: 'mass', r: 1e-9 },
+  t: { cat: 'mass', r: 1000 }, tonne: { cat: 'mass', r: 1000 }, tonnes: { cat: 'mass', r: 1000 },
+  lb: { cat: 'mass', r: 0.45359237 }, lbs: { cat: 'mass', r: 0.45359237 }, pound: { cat: 'mass', r: 0.45359237 }, pounds: { cat: 'mass', r: 0.45359237 },
+  oz: { cat: 'mass', r: 0.028349523125 }, ounce: { cat: 'mass', r: 0.028349523125 }, ounces: { cat: 'mass', r: 0.028349523125 },
+  st: { cat: 'mass', r: 6.35029318 }, stone: { cat: 'mass', r: 6.35029318 },
+  cwt: { cat: 'mass', r: 50.80234544 }, ton: { cat: 'mass', r: 907.18474 }, tons: { cat: 'mass', r: 907.18474 },
+
+  // Volume (Base: liter)
+  l: { cat: 'vol', r: 1 }, liter: { cat: 'vol', r: 1 }, liters: { cat: 'vol', r: 1 }, litre: { cat: 'vol', r: 1 },
+  ml: { cat: 'vol', r: 0.001 }, milliliter: { cat: 'vol', r: 0.001 }, milliliters: { cat: 'vol', r: 0.001 },
+  cl: { cat: 'vol', r: 0.01 }, dl: { cat: 'vol', r: 0.1 }, m3: { cat: 'vol', r: 1000 },
+  gal: { cat: 'vol', r: 3.785411784 }, gallon: { cat: 'vol', r: 3.785411784 }, gallons: { cat: 'vol', r: 3.785411784 },
+  impgal: { cat: 'vol', r: 4.54609 }, impgallon: { cat: 'vol', r: 4.54609 },
+  qt: { cat: 'vol', r: 0.946352946 }, quart: { cat: 'vol', r: 0.946352946 }, quarts: { cat: 'vol', r: 0.946352946 },
+  pt: { cat: 'vol', r: 0.473176473 }, pint: { cat: 'vol', r: 0.473176473 }, pints: { cat: 'vol', r: 0.473176473 },
+  cup: { cat: 'vol', r: 0.24 }, cups: { cat: 'vol', r: 0.24 },
+  floz: { cat: 'vol', r: 0.0295735295625 }, fluidounce: { cat: 'vol', r: 0.0295735295625 },
+  tbsp: { cat: 'vol', r: 0.01478676478125 }, tablespoon: { cat: 'vol', r: 0.01478676478125 },
+  tsp: { cat: 'vol', r: 0.00492892159375 }, teaspoon: { cat: 'vol', r: 0.00492892159375 },
+  bbl: { cat: 'vol', r: 158.987294928 },
+
+  // Area (Base: m2)
+  m2: { cat: 'area', r: 1 }, sqm: { cat: 'area', r: 1 },
+  km2: { cat: 'area', r: 1e6 }, sqkm: { cat: 'area', r: 1e6 },
+  cm2: { cat: 'area', r: 0.0001 }, sqcm: { cat: 'area', r: 0.0001 },
+  mm2: { cat: 'area', r: 1e-6 }, sqmm: { cat: 'area', r: 1e-6 },
+  ha: { cat: 'area', r: 10000 }, hectare: { cat: 'area', r: 10000 }, hectares: { cat: 'area', r: 10000 },
+  acre: { cat: 'area', r: 4046.8564224 }, acres: { cat: 'area', r: 4046.8564224 },
+  sqft: { cat: 'area', r: 0.09290304 }, ft2: { cat: 'area', r: 0.09290304 },
+  sqin: { cat: 'area', r: 0.00064516 }, in2: { cat: 'area', r: 0.00064516 },
+  sqyd: { cat: 'area', r: 0.83612736 }, yd2: { cat: 'area', r: 0.83612736 },
+  sqmi: { cat: 'area', r: 2589988.110336 }, mi2: { cat: 'area', r: 2589988.110336 },
+
+  // Speed (Base: m/s)
+  mps: { cat: 'speed', r: 1 }, 'm/s': { cat: 'speed', r: 1 },
+  kmh: { cat: 'speed', r: 1 / 3.6 }, kph: { cat: 'speed', r: 1 / 3.6 }, 'km/h': { cat: 'speed', r: 1 / 3.6 },
+  mph: { cat: 'speed', r: 0.44704 },
+  knot: { cat: 'speed', r: 0.514444 }, knots: { cat: 'speed', r: 0.514444 }, kn: { cat: 'speed', r: 0.514444 },
+  fps: { cat: 'speed', r: 0.3048 }, 'ft/s': { cat: 'speed', r: 0.3048 },
+
+  // Pressure (Base: Pascal)
+  pa: { cat: 'press', r: 1 }, pascal: { cat: 'press', r: 1 },
+  kpa: { cat: 'press', r: 1000 }, bar: { cat: 'press', r: 100000 }, mbar: { cat: 'press', r: 100 },
+  psi: { cat: 'press', r: 6894.757293168 }, atm: { cat: 'press', r: 101325 },
+  torr: { cat: 'press', r: 133.3223684 }, mmhg: { cat: 'press', r: 133.3223684 },
+
+  // Energy & Power (Base: Joule / Watt)
+  j: { cat: 'energy', r: 1 }, joule: { cat: 'energy', r: 1 }, joules: { cat: 'energy', r: 1 },
+  kj: { cat: 'energy', r: 1000 }, mj: { cat: 'energy', r: 1e6 },
+  cal: { cat: 'energy', r: 4.184 }, calorie: { cat: 'energy', r: 4.184 }, calories: { cat: 'energy', r: 4.184 },
+  kcal: { cat: 'energy', r: 4184 }, wh: { cat: 'energy', r: 3600 }, kwh: { cat: 'energy', r: 3.6e6 },
+  ev: { cat: 'energy', r: 1.602176634e-19 }, btu: { cat: 'energy', r: 1055.05585 },
+  w: { cat: 'power', r: 1 }, watt: { cat: 'power', r: 1 }, watts: { cat: 'power', r: 1 },
+  kw: { cat: 'power', r: 1000 }, mw: { cat: 'power', r: 1e6 }, hp: { cat: 'power', r: 745.699872 }, horsepower: { cat: 'power', r: 745.699872 },
+
+  // Digital Data (Base: Byte)
+  b: { cat: 'data', r: 1 }, byte: { cat: 'data', r: 1 }, bytes: { cat: 'data', r: 1 },
+  bit: { cat: 'data', r: 0.125 }, bits: { cat: 'data', r: 0.125 },
+  kb: { cat: 'data', r: 1024 }, mb: { cat: 'data', r: 1048576 }, gb: { cat: 'data', r: 1073741824 },
+  tb: { cat: 'data', r: 1099511627776 }, pb: { cat: 'data', r: 1125899906842624 },
+  kbit: { cat: 'data', r: 125 }, mbit: { cat: 'data', r: 125000 }, gbit: { cat: 'data', r: 125000000 },
+
+  // Time (Base: Second)
+  s: { cat: 'time', r: 1 }, sec: { cat: 'time', r: 1 }, second: { cat: 'time', r: 1 }, seconds: { cat: 'time', r: 1 },
+  ms: { cat: 'time', r: 0.001 }, millisecond: { cat: 'time', r: 0.001 },
+  min: { cat: 'time', r: 60 }, minute: { cat: 'time', r: 60 }, minutes: { cat: 'time', r: 60 },
+  h: { cat: 'time', r: 3600 }, hr: { cat: 'time', r: 3600 }, hour: { cat: 'time', r: 3600 }, hours: { cat: 'time', r: 3600 },
+  d: { cat: 'time', r: 86400 }, day: { cat: 'time', r: 86400 }, days: { cat: 'time', r: 86400 },
+  wk: { cat: 'time', r: 604800 }, week: { cat: 'time', r: 604800 }, weeks: { cat: 'time', r: 604800 },
+  mo: { cat: 'time', r: 2629800 }, month: { cat: 'time', r: 2629800 }, months: { cat: 'time', r: 2629800 },
+  yr: { cat: 'time', r: 31557600 }, year: { cat: 'time', r: 31557600 }, years: { cat: 'time', r: 31557600 }
+};
+
+function normalizeUnit(u){
+  u = (u || '').trim().toLowerCase();
+  if(CURRENCY_SYMBOLS[u]) return CURRENCY_SYMBOLS[u];
+  return u;
+}
+
+function convertValue(val, fromUnit, toUnit){
+  fromUnit = normalizeUnit(fromUnit);
+  toUnit = normalizeUnit(toUnit);
+
+  // Temperature
+  var isTemp = function(u){ return /^(c|degc|celsius|f|degf|fahrenheit|k|kelvin|degk)$/i.test(u); };
+  if(isTemp(fromUnit) && isTemp(toUnit)){
+    var c;
+    if(/^c/i.test(fromUnit)) c = val;
+    else if(/^f/i.test(fromUnit)) c = (val - 32) * 5 / 9;
+    else if(/^k/i.test(fromUnit)) c = val - 273.15;
+
+    if(/^c/i.test(toUnit)) return c;
+    if(/^f/i.test(toUnit)) return (c * 9 / 5) + 32;
+    if(/^k/i.test(toUnit)) return c + 273.15;
+  }
+
+  // Currency
+  var fromCurr = fromUnit.toUpperCase();
+  var toCurr = toUnit.toUpperCase();
+  if(npCurrencyRates[fromCurr] && npCurrencyRates[toCurr]){
+    var valUSD = val / npCurrencyRates[fromCurr];
+    return valUSD * npCurrencyRates[toCurr];
+  }
+
+  // Standard Metric / Imperial
+  var u1 = NP_UNITS[fromUnit];
+  var u2 = NP_UNITS[toUnit];
+  if(u1 && u2 && u1.cat === u2.cat){
+    var baseVal = val * u1.r;
+    return baseVal / u2.r;
+  }
+
+  return null;
+}
+
+// Date Arithmetic
+var DATE_TOKEN_PATTERN = '(?:\\d{4}-\\d{2}-\\d{2}(?:[ T]\\d{1,2}:\\d{2}(?::\\d{2})?)?|today|now|[A-Za-z_][A-Za-z0-9_]*)';
+var LEADING_DATE_RE = new RegExp('^\\s*(' + DATE_TOKEN_PATTERN + ')\\s*(.*)$', 'i');
+var DATE_DIFF_RE = new RegExp('^\\s*(' + DATE_TOKEN_PATTERN + ')\\s*-\\s*(' + DATE_TOKEN_PATTERN + ')\\s*$', 'i');
+
+function parseDateToken(str, dateScope){
+  str = (str || '').trim();
+  if(!str){ return null; }
+  if(Object.prototype.hasOwnProperty.call(dateScope, str)){ return new Date(dateScope[str].getTime()); }
+  if(/^today$/i.test(str)){ var t = new Date(); t.setHours(0, 0, 0, 0); return t; }
+  if(/^now$/i.test(str)){ return new Date(); }
+  var m = str.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
+  if(!m){ return null; }
+  var y = parseInt(m[1], 10), mo = parseInt(m[2], 10) - 1, da = parseInt(m[3], 10);
+  var h = m[4] !== undefined ? parseInt(m[4], 10) : 0;
+  var mi = m[5] !== undefined ? parseInt(m[5], 10) : 0;
+  var se = m[6] !== undefined ? parseInt(m[6], 10) : 0;
+  var d = new Date(y, mo, da, h, mi, se);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function formatDateOut(d, hasTime){
+  var WD = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  var s = d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+  if(hasTime){ s += ' ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes()) + ':' + pad2(d.getSeconds()); }
+  s += ' (' + WD[d.getDay()] + ')';
+  return s;
+}
+
+function calendarDiffBreak(a, b){
+  var years = b.getFullYear() - a.getFullYear();
+  var months = b.getMonth() - a.getMonth();
+  var days = b.getDate() - a.getDate();
+  var hours = b.getHours() - a.getHours();
+  var minutes = b.getMinutes() - a.getMinutes();
+  var seconds = b.getSeconds() - a.getSeconds();
+  if(seconds < 0){ seconds += 60; minutes--; }
+  if(minutes < 0){ minutes += 60; hours--; }
+  if(hours < 0){ hours += 24; days--; }
+  if(days < 0){
+    var prevMonthLastDay = new Date(b.getFullYear(), b.getMonth(), 0).getDate();
+    days += prevMonthLastDay;
+    months--;
+  }
+  if(months < 0){ months += 12; years--; }
+  return { years: years, months: months, days: days, hours: hours, minutes: minutes, seconds: seconds };
+}
+
+function tryDateDiff(exprText, dateScope){
+  var m = exprText.match(DATE_DIFF_RE);
+  if(!m){ return null; }
+  var d1 = parseDateToken(m[1], dateScope);
+  var d2 = parseDateToken(m[2], dateScope);
+  if(!d1 || !d2){ return null; }
+  var neg = d1 < d2;
+  var a = neg ? d1 : d2;
+  var b = neg ? d2 : d1;
+  var diff = calendarDiffBreak(a, b);
+  var parts = [];
+  if(diff.years) parts.push(diff.years + ' year' + (diff.years !== 1 ? 's' : ''));
+  if(diff.months) parts.push(diff.months + ' month' + (diff.months !== 1 ? 's' : ''));
+  if(diff.days) parts.push(diff.days + ' day' + (diff.days !== 1 ? 's' : ''));
+  if(diff.hours) parts.push(diff.hours + ' hour' + (diff.hours !== 1 ? 's' : ''));
+  if(diff.minutes) parts.push(diff.minutes + ' minute' + (diff.minutes !== 1 ? 's' : ''));
+  if(diff.seconds || !parts.length) parts.push(diff.seconds + ' second' + (diff.seconds !== 1 ? 's' : ''));
+  var totalDays = Math.round((b.getTime() - a.getTime()) / 86400000);
+  var signedTotalDays = neg ? -totalDays : totalDays;
+  var text = (neg ? '-' : '') + parts.join(', ') + ' (' + signedTotalDays + ' days total)';
+  return { text: text, totalDays: signedTotalDays };
+}
+
+function tryDateArithmetic(exprText, dateScope){
+  var m = exprText.match(LEADING_DATE_RE);
+  if(!m){ return null; }
+  var base = parseDateToken(m[1], dateScope);
+  if(!base){ return null; }
+  var rest = m[2] || '';
+  var hasTime = /:/.test(m[1]);
+  if(!rest.trim()){
+    return { date: new Date(base.getTime()), hasTime: hasTime };
+  }
+  var result = new Date(base.getTime());
+  var anyTerm = false;
+  var termRe = /([+\-])\s*(\d+(?:\.\d+)?)\s*(y|mo|d|h|min|s)\b/gi;
+  var match;
+  while((match = termRe.exec(rest)) !== null){
+    anyTerm = true;
+    var sign = match[1] === '-' ? -1 : 1;
+    var amt = parseFloat(match[2]) * sign;
+    var unit = match[3].toLowerCase();
+    if(unit === 'y'){ result.setFullYear(result.getFullYear() + amt); }
+    else if(unit === 'mo'){ result.setMonth(result.getMonth() + amt); }
+    else if(unit === 'd'){ result.setDate(result.getDate() + amt); }
+    else if(unit === 'h'){ result.setHours(result.getHours() + amt); hasTime = true; }
+    else if(unit === 'min'){ result.setMinutes(result.getMinutes() + amt); hasTime = true; }
+    else if(unit === 's'){ result.setSeconds(result.getSeconds() + amt); hasTime = true; }
+  }
+  if(!anyTerm){ return null; }
+  var remainder = rest.replace(/([+\-])\s*(\d+(?:\.\d+)?)\s*(y|mo|d|h|min|s)\b/gi, '').trim();
+  if(remainder !== ''){ return null; }
+  return { date: result, hasTime: hasTime };
+}
+
+function substituteDateComponents(exprText, dateScope){
+  return exprText.replace(/\b(year|month|day|hour|minute|second|weekday)\s*\(\s*([^)]+?)\s*\)/gi, function(match, fn, inner){
+    var d = parseDateToken(inner, dateScope);
+    if(!d){ return match; }
+    fn = fn.toLowerCase();
+    var val;
+    if(fn === 'year'){ val = d.getFullYear(); }
+    else if(fn === 'month'){ val = d.getMonth() + 1; }
+    else if(fn === 'day'){ val = d.getDate(); }
+    else if(fn === 'hour'){ val = d.getHours(); }
+    else if(fn === 'minute'){ val = d.getMinutes(); }
+    else if(fn === 'second'){ val = d.getSeconds(); }
+    else if(fn === 'weekday'){ val = d.getDay(); }
+    return String(val);
+  });
+}
+
+function evaluateNotepad(text){
+  var lines = text.split('\n');
+  var scope = {};
+  var dateScope = {};
+  var lineValues = [];
+  var results = [];
+  lines.forEach(function(rawLine, idx){
+    var trimmed = rawLine.trim();
+    if(!trimmed){ results.push(''); lineValues.push(undefined); return; }
+    var work = trimmed.replace(/=+\s*$/, '').trim();
+    var assignMatch = work.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.+)$/);
+    var exprText, varName = null, selfUpdateName = null;
+    if(assignMatch){
+      varName = assignMatch[1];
+      exprText = assignMatch[2];
+    } else {
+      exprText = work;
+      var compoundMatch = work.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*([+\-*/])=\s*(.+)$/);
+      if(compoundMatch){
+        selfUpdateName = compoundMatch[1];
+        exprText = selfUpdateName + compoundMatch[2] + '(' + compoundMatch[3] + ')';
+      } else {
+        var selfMatch = work.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*[+\-*/]/);
+        if(selfMatch && Object.prototype.hasOwnProperty.call(scope, selfMatch[1])){
+          selfUpdateName = selfMatch[1];
+        }
+      }
+    }
+
+    if(selfUpdateName === null){
+      exprText = substituteDateComponents(exprText, dateScope);
+      var diffOut = tryDateDiff(exprText, dateScope);
+      if(diffOut){
+        results.push('= ' + diffOut.text);
+        if(varName){ scope[varName] = diffOut.totalDays; }
+        lineValues.push(diffOut.totalDays);
+        return;
+      }
+      var arithOut = tryDateArithmetic(exprText, dateScope);
+      if(arithOut){
+        var formattedDate = formatDateOut(arithOut.date, arithOut.hasTime);
+        results.push('= ' + formattedDate);
+        if(varName){
+          dateScope[varName] = arithOut.date;
+          scope[varName] = arithOut.date.getTime();
+        }
+        lineValues.push(arithOut.date.getTime());
+        return;
+      }
+    }
+
+    // Check for Unit / Currency conversion syntax: "100 USD to INR" or "10 km in miles"
+    var convMatch = exprText.match(/^(.*?)\s+(?:to|in)\s+([A-Za-z0-9_/$%^]+)$/i);
+    if(convMatch){
+      var leftRaw = convMatch[1].trim();
+      var targetUnit = convMatch[2].trim();
+      var fromUnit = null;
+      var valSubExpr = leftRaw;
+
+      // Check prefix currency symbol like $100 or €50
+      var prefSymMatch = leftRaw.match(/^([$€£₹¥])\s*(.+)$/);
+      if(prefSymMatch){
+        fromUnit = prefSymMatch[1];
+        valSubExpr = prefSymMatch[2];
+      } else {
+        var sufUnitMatch = leftRaw.match(/^(.*?)\s*([A-Za-z_/$%^]+)$/);
+        if(sufUnitMatch){
+          valSubExpr = sufUnitMatch[1];
+          fromUnit = sufUnitMatch[2];
+        }
+      }
+
+      // Evaluate the numerical value expression cleanly
+      var evalVal = null;
+      try {
+        var envTemp = Object.assign({}, NP_BUILTINS, scope);
+        var argN = Object.keys(envTemp);
+        var argV = argN.map(function(k){ return envTemp[k]; });
+        var cleanValSub = valSubExpr.replace(/\bL(\d+)\b/gi, function(m, n){
+          var rIdx = parseInt(n, 10) - 1;
+          return (rIdx >= 0 && rIdx < idx && lineValues[rIdx] !== undefined) ? '(' + lineValues[rIdx] + ')' : '0';
+        });
+        var fnVal = new Function(argN.join(','), 'return (' + cleanValSub.replace(/\^/g, '**') + ');');
+        evalVal = fnVal.apply(null, argV);
+      } catch(e){}
+
+      if(typeof evalVal === 'number' && !isNaN(evalVal) && fromUnit){
+        var converted = convertValue(evalVal, fromUnit, targetUnit);
+        if(converted !== null){
+          converted = Math.round(converted * 10000) / 10000;
+          results.push('= ' + converted + ' ' + targetUnit);
+          if(varName){ scope[varName] = converted; }
+          else if(selfUpdateName){ scope[selfUpdateName] = converted; }
+          lineValues.push(converted);
+          return;
+        }
+      }
+    }
+
+    if(!exprText || !/^[0-9A-Za-z_+\-*/(),.\s^%!:]*$/.test(exprText)){
+      results.push('');
+      lineValues.push(undefined);
+      return;
+    }
+
+    // Resolve Range formulas over earlier lines
+    var rangeOk = true;
+    function rangeValues(a, b){
+      var s = parseInt(a, 10) - 1, en = parseInt(b, 10) - 1;
+      if(s > en){ var t = s; s = en; en = t; }
+      var vals = [];
+      for(var i = s; i <= en; i++){
+        if(i < 0 || i >= idx || lineValues[i] === undefined){ return null; }
+        vals.push(lineValues[i]);
+      }
+      return vals;
+    }
+    var withFuncRanges = exprText.replace(/\b(sum|avg|average|min|max|count)\s*\(\s*L(\d+)\s*(?:to|:)\s*L(\d+)\s*\)/gi, function(m, fn, a, b){
+      var vals = rangeValues(a, b);
+      if(!vals){ rangeOk = false; return '0'; }
+      var lower = fn.toLowerCase();
+      if(lower === 'sum'){ return '(' + vals.join('+') + ')'; }
+      if(lower === 'avg' || lower === 'average'){ return '((' + vals.join('+') + ')/' + vals.length + ')'; }
+      if(lower === 'min'){ return 'min(' + vals.join(',') + ')'; }
+      if(lower === 'max'){ return 'max(' + vals.join(',') + ')'; }
+      if(lower === 'count'){ return String(vals.length); }
+      return '0';
+    });
+    if(!rangeOk){ results.push(''); lineValues.push(undefined); return; }
+
+    var withBareRanges = withFuncRanges.replace(/\bL(\d+)\s*(?:to|:)\s*L(\d+)\b/gi, function(m, a, b){
+      var vals = rangeValues(a, b);
+      if(!vals){ rangeOk = false; return '0'; }
+      return '(' + vals.join('+') + ')';
+    });
+    if(!rangeOk){ results.push(''); lineValues.push(undefined); return; }
+
+    var lineRefOk = true;
+    var withLineRefs = withBareRanges.replace(/\bL(\d+)\b/gi, function(match, numStr){
+      var refIdx = parseInt(numStr, 10) - 1;
+      if(refIdx < 0 || refIdx >= idx || lineValues[refIdx] === undefined){
+        lineRefOk = false; return '0';
+      }
+      return '(' + lineValues[refIdx] + ')';
+    });
+    if(!lineRefOk){ results.push(''); lineValues.push(undefined); return; }
+
+    try{
+      var safe = withLineRefs.replace(/(\d+(\.\d+)?)!/g, 'fact($1)');
+      safe = safe.replace(/(\d+(\.\d+)?)\s*%/g, '($1/100)');
+      safe = safe.replace(/\^/g, '**');
+      var env = {};
+      Object.keys(NP_BUILTINS).forEach(function(k){ env[k] = NP_BUILTINS[k]; });
+      Object.keys(scope).forEach(function(k){ env[k] = scope[k]; });
+      var argNames = Object.keys(env);
+      var argValues = argNames.map(function(k){ return env[k]; });
+      var fn = new Function(argNames.join(','), 'return (' + safe + ');');
+      var val = fn.apply(null, argValues);
+      if(typeof val !== 'number' || !isFinite(val)){ results.push(''); lineValues.push(undefined); return; }
+      val = Math.round(val * 10000) / 10000;
+      if(varName){ scope[varName] = val; }
+      else if(selfUpdateName){ scope[selfUpdateName] = val; }
+      lineValues.push(val);
+      var isPlainLiteralAssign = varName && /^-?\d+(\.\d+)?$/.test(exprText.trim()) && parseFloat(exprText.trim()) === val;
+      results.push(isPlainLiteralAssign ? '' : ('= ' + val));
+    }catch(e){
+      results.push(''); lineValues.push(undefined);
+    }
+  });
+  return { results: results, scope: scope };
+}
+
+function escapeHtml(s){
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function renderNotepad(){
+  var lines = npInput.value.split('\n');
+  var evalOut = evaluateNotepad(npInput.value);
+  var results = evalOut.results;
+  npKnownVars = Object.keys(evalOut.scope);
+  var tsChanged = false;
+  var nextTimestamps = [];
+  var html = lines.map(function(rawLine, i){
+    var res = results[i] || '';
+    var ghostText = rawLine.length ? rawLine : ' ';
+    var displayText = '';
+    var valueOnly = '';
+    if(res){
+      valueOnly = res.replace(/^=\s*/, '');
+      var hasTrailingEq = /=\s*$/.test(rawLine.trim());
+      displayText = hasTrailingEq ? (' ' + valueOnly) : (' = ' + valueOnly);
+    }
+    var resultClass = res ? 'ov-result has-value' : 'ov-result';
+    var dataAttr = res ? ' data-value="' + escapeHtml(valueOnly) + '" title="Click to copy"' : '';
+
+    var trimmedLine = rawLine.trim();
+    var tsSpan = '';
+    if(trimmedLine){
+      var existing = npLineTimestamps[i];
+      var entry;
+      if(existing && existing.text === trimmedLine){
+        entry = existing;
+      } else {
+        entry = { text: trimmedLine, ts: formatNpTimestamp(new Date()) };
+        tsChanged = true;
+      }
+      nextTimestamps[i] = entry;
+      var isSettled = npLastFinalizedText[i] === trimmedLine;
+      if(isSettled){
+        var flashClass = npFlashLines[i] ? ' ov-ts-flash' : '';
+        tsSpan = '<span class="ov-timestamp' + flashClass + '"> (' + entry.ts + ')</span>';
+      }
+    } else {
+      nextTimestamps[i] = null;
+    }
+
+    var linkChip = '';
+    if(npCsvHeaders.length && trimmedLine){
+      var lineMatch = rawLine.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=/);
+      var linkKey = lineMatch ? ('var:' + lineMatch[1]) : ('line:' + i);
+      var linkedCol = npLineLinks[linkKey];
+      var chipClass = linkedCol ? 'ov-link-chip linked' : 'ov-link-chip';
+      var chipLabel = linkedCol ? ('\uD83D\uDD17 ' + linkedCol) : '\uD83D\uDD17 link';
+      linkChip = '<span class="' + chipClass + '" data-linkkey="' + escapeHtml(linkKey) + '" title="Click to link this line to a CSV column">' + escapeHtml(chipLabel) + '</span>';
+    }
+
+    // Auto-hyperlinks detector for web addresses
+    var webLinksHtml = '';
+    if(trimmedLine){
+      var urlRegex = /(https?:\/\/[^\s]+|www\.[^\s]+|[a-zA-Z0-9.-]+\.(?:com|org|net|edu|gov|io|co|in|app|dev|me|info)(?:\/[^\s]*)?)/gi;
+      var urlMatch;
+      while((urlMatch = urlRegex.exec(rawLine)) !== null){
+        var u = urlMatch[1];
+        var href = /^https?:\/\//i.test(u) ? u : ('https://' + u);
+        webLinksHtml += '<a class="ov-web-link" href="' + escapeHtml(href) + '" target="_blank" rel="noopener" title="Open ' + escapeHtml(href) + '">&#128279; ' + escapeHtml(u) + '</a>';
+      }
+    }
+
+    return '<div class="ov-line"><span class="ov-ghost">' + escapeHtml(ghostText) + '</span><span class="' + resultClass + '"' + dataAttr + '>' + escapeHtml(displayText) + '</span>' + webLinksHtml + linkChip + tsSpan + '</div>';
+  }).join('');
+  npOverlay.innerHTML = html;
+  npLineTimestamps = nextTimestamps;
+  if(tsChanged){ npScheduleTsSave(); }
+
+  var gutterHtml = lines.map(function(_, i){ return '<div>' + (i + 1) + '</div>'; }).join('');
+  npGutter.innerHTML = gutterHtml;
+  npGutter.scrollTop = npInput.scrollTop;
+}
+
+var npSaveTimer = null;
+function npSaveNow(){
+  try{
+    localStorage.setItem(NP_STORAGE_KEY, npInput.value);
+    npSavedStatus.textContent = 'Saved';
+    setTimeout(function(){ npSavedStatus.textContent = ''; }, 1200);
+  }catch(e){
+    npSavedStatus.textContent = 'Could not save';
+  }
+}
+function npScheduleSave(){
+  npSavedStatus.textContent = '';
+  clearTimeout(npSaveTimer);
+  npSaveTimer = setTimeout(npSaveNow, 500);
+}
+
+document.getElementById('npClear').addEventListener('click', function(){
+  npInput.value = '';
+  renderNotepad();
+  npSaveNow();
+  npInput.focus();
+});
+
+var NP_FONT_KEY = 'notepad-calculator-fullpage-fontsize-v1';
+var npFontSize = 16;
+try{
+  var storedFont = parseInt(localStorage.getItem(NP_FONT_KEY));
+  if(storedFont && storedFont >= 12 && storedFont <= 32){ npFontSize = storedFont; }
+}catch(e){}
+
+function applyFontSize(){
+  document.documentElement.style.setProperty('--np-font-size', npFontSize + 'px');
+  document.documentElement.style.setProperty('--np-line-height', Math.round(npFontSize * 1.85) + 'px');
+  try{ localStorage.setItem(NP_FONT_KEY, npFontSize); }catch(e){}
+}
+applyFontSize();
+
+document.getElementById('npFontUp').addEventListener('click', function(){
+  npFontSize = Math.min(32, npFontSize + 2);
+  applyFontSize();
+});
+document.getElementById('npFontDown').addEventListener('click', function(){
+  npFontSize = Math.max(12, npFontSize - 2);
+  applyFontSize();
+});
+
+function buildExportText(){
+  var lines = npInput.value.split('\n');
+  var evalOut = evaluateNotepad(npInput.value);
+  var results = evalOut.results;
+  return lines.map(function(rawLine, i){
+    var trimmedLine = rawLine.trim();
+    if(!trimmedLine){ return rawLine; }
+
+    var res = results[i] || '';
+    var line = rawLine;
+    if(res){
+      var valueOnly = res.replace(/^=\s*/, '');
+      var hasTrailingEq = /=\s*$/.test(trimmedLine);
+      line += hasTrailingEq ? (' ' + valueOnly) : (' = ' + valueOnly);
+    }
+
+    var entry = npLineTimestamps[i];
+    var isSettled = entry && entry.text === trimmedLine && npLastFinalizedText[i] === trimmedLine;
+    if(isSettled){ line += ' (' + entry.ts + ')'; }
+    return line;
+  }).join('\n');
+}
+
+document.getElementById('npExport').addEventListener('click', function(){
+  var blob = new Blob([buildExportText()], { type: 'text/plain' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  var stamp = new Date().toISOString().slice(0,10);
+  a.href = url;
+  a.download = 'notepad-calculator-' + stamp + '.txt';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+});
+
+var npImportFile = document.getElementById('npImportFile');
+document.getElementById('npImportBtn').addEventListener('click', function(){
+  npImportFile.click();
+});
+npImportFile.addEventListener('change', function(){
+  var file = npImportFile.files && npImportFile.files[0];
+  if(!file){ return; }
+  var reader = new FileReader();
+  var TS_SUFFIX_RE = /\s*\((\d{4}\/\d{2}\/\d{2}\/\d{2}:\d{2}:\d{2})\)\s*$/;
+  var VALUE_SUFFIX_RE = /^(.*?)\s=\s(-?\d+(?:\.\d+)?)\s*$/;
+  reader.onload = function(e){
+    var rawLines = e.target.result.split('\n');
+    var restoredTimestamps = [];
+    var tsStrippedLines = rawLines.map(function(rawLine, i){
+      var m = rawLine.match(TS_SUFFIX_RE);
+      if(m){
+        restoredTimestamps[i] = { ts: m[1] };
+        return rawLine.slice(0, m.index);
+      }
+      restoredTimestamps[i] = null;
+      return rawLine;
+    });
+
+    var finalLines = tsStrippedLines.slice();
+    tsStrippedLines.forEach(function(line, i){
+      var m = line.match(VALUE_SUFFIX_RE);
+      if(!m){ return; }
+      var candidate = m[1];
+      var testLines = finalLines.slice(0, i).concat([candidate]);
+      var testOut = evaluateNotepad(testLines.join('\n'));
+      var testRes = testOut.results[i];
+      if(testRes && parseFloat(testRes.replace(/^=\s*/, '')) === parseFloat(m[2])){
+        finalLines[i] = candidate;
+      }
+    });
+
+    finalLines.forEach(function(line, i){
+      if(restoredTimestamps[i]){ restoredTimestamps[i].text = line.trim(); }
+    });
+
+    npInput.value = finalLines.join('\n');
+    npLineTimestamps = restoredTimestamps;
+    npLastFinalizedText = finalLines.map(function(l){ return l.trim(); });
+    npFlashLines = {};
+    renderNotepad();
+    npScheduleTsSave();
+    npSaveNow();
+  };
+  reader.readAsText(file);
+  npImportFile.value = '';
+});
+
+var npCsvFile = document.getElementById('npCsvFile');
+document.getElementById('npCsvBtn').addEventListener('click', function(){
+  npCsvFile.click();
+});
+npCsvFile.addEventListener('change', function(){
+  var file = npCsvFile.files && npCsvFile.files[0];
+  if(!file){ return; }
+  var reader = new FileReader();
+  reader.onload = function(e){
+    var parsed = parseCSV(e.target.result);
+    if(!parsed.headers.length){ return; }
+    npCsvHeaders = parsed.headers;
+    npCsvRows = parsed.rows;
+    npCsvIndex = 0;
+    npCsvIdColumn = npCsvHeaders.filter(function(h){ return /^id$/i.test(h); })[0] || npCsvHeaders[0];
+
+    var existingVarNames = [];
+    npInput.value.split('\n').forEach(function(line){
+      var m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=/);
+      if(m){ existingVarNames.push(m[1]); }
+    });
+    npCsvHeaders.forEach(function(col){
+      if(existingVarNames.indexOf(col) !== -1 && !npLineLinks['var:' + col]){
+        npLineLinks['var:' + col] = col;
+      }
+    });
+    npScheduleCsvLinksSave();
+
+    refreshCsvNav();
+    applyCsvRecordToText(npCsvRows[0]);
+    npScheduleCsvSave();
+  };
+  reader.readAsText(file);
+  npCsvFile.value = '';
+});
+document.getElementById('npCsvPrev').addEventListener('click', function(){ goToCsvRecord(npCsvIndex - 1); });
+document.getElementById('npCsvNext').addEventListener('click', function(){ goToCsvRecord(npCsvIndex + 1); });
+document.getElementById('npCsvSelect').addEventListener('change', function(e){ goToCsvRecord(parseInt(e.target.value, 10) || 0); });
+document.getElementById('npCsvResetLinks').addEventListener('click', function(){
+  npLineLinks = {}; npCsvHeaders = []; npCsvRows = []; npCsvIdColumn = null; npCsvIndex = 0;
+  npScheduleCsvLinksSave(); npScheduleCsvSave(); npCsvFile.value = ''; renderNotepad();
+  var btn = document.getElementById('npCsvResetLinks');
+  var original = btn.textContent;
+  btn.textContent = 'Reset ✓'; btn.disabled = true;
+  setTimeout(function(){ btn.textContent = original; btn.disabled = false; refreshCsvNav(); }, 900);
+});
+refreshCsvNav();
+
+npInput.addEventListener('input', function(e){
+  renderNotepad(); npScheduleSave(); updateSuggestions(); scheduleFinalizeCheck(); maybeAutoCorrectWord(e);
+});
+npInput.addEventListener('scroll', function(){
+  npOverlay.scrollTop = npInput.scrollTop; npOverlay.scrollLeft = npInput.scrollLeft; npGutter.scrollTop = npInput.scrollTop;
+  if(npSuggestState.active){ positionSuggestDropdown(); }
+});
+
+npOverlay.addEventListener('click', function(e){
+  var chip = e.target.closest('.ov-link-chip');
+  if(chip){
+    var linkKey = chip.getAttribute('data-linkkey');
+    var options = ['(none)'].concat(npCsvHeaders);
+    var current = npLineLinks[linkKey] || '(none)';
+    var idx = options.indexOf(current);
+    var next = options[(idx + 1) % options.length];
+    if(next === '(none)'){ delete npLineLinks[linkKey]; }
+    else { npLineLinks[linkKey] = next; }
+    npScheduleCsvLinksSave();
+    if(npCsvRows.length){ applyCsvRecordToText(npCsvRows[npCsvIndex]); }
+    renderNotepad();
+    return;
+  }
+  var target = e.target.closest('.has-value');
+  if(!target){ return; }
+  var text = target.getAttribute('data-value');
+  if(!text){ return; }
+  var flashCopied = function(){
+    target.classList.add('ov-copied');
+    setTimeout(function(){ target.classList.remove('ov-copied'); }, 500);
+  };
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(flashCopied).catch(function(){});
+  }
+});
+
+/* Autocomplete & Thesaurus */
+var npKnownVars = [];
+var npSuggestEl = document.getElementById('npSuggest');
+var npMirrorEl = null;
+var npSuggestState = { active: false, mode: 'complete', matches: [], replaceStart: 0, replaceEnd: 0, highlightIndex: 0 };
+var npSuggestGen = 0;
+var npSugCache = {}; var npSynCache = {}; var npSpellCache = {};
+var npCompletionTimer = null;
+
+function getWordBeforeCaret(value, pos){
+  var start = pos;
+  while(start > 0 && /[A-Za-z0-9_]/.test(value[start - 1])){ start--; }
+  return { start: start, word: value.slice(start, pos) };
+}
+
+function getWordAtCaret(value, pos){
+  var start = pos, end = pos;
+  while(start > 0 && /[A-Za-z']/.test(value[start - 1])){ start--; }
+  while(end < value.length && /[A-Za-z']/.test(value[end])){ end++; }
+  return { start: start, end: end, word: value.slice(start, end) };
+}
+
+function datamuseFetch(url, cache, key, cb){
+  if(Object.prototype.hasOwnProperty.call(cache, key)){ cb(cache[key]); return; }
+  fetch(url).then(function(r){ return r.ok ? r.json() : []; }).then(function(data){
+    var words = (data || []).map(function(d){ return d.word; }).filter(function(w){
+      return /^[a-z]+(?:[ '-][a-z]+)*$/i.test(w);
+    });
+    cache[key] = words; cb(words);
+  }).catch(function(){ cb([]); });
+}
+
+function fetchCompletions(prefix, cb){ datamuseFetch('https://api.datamuse.com/sug?s=' + encodeURIComponent(prefix) + '&max=6', npSugCache, prefix.toLowerCase(), cb); }
+function fetchSpelling(word, cb){ datamuseFetch('https://api.datamuse.com/words?sp=' + encodeURIComponent(word) + '&max=5', npSpellCache, word.toLowerCase(), cb); }
+function fetchSynonyms(word, cb){ datamuseFetch('https://api.datamuse.com/words?rel_syn=' + encodeURIComponent(word) + '&max=10', npSynCache, word.toLowerCase(), cb); }
+
+var NP_AC_ENABLED_KEY = 'notepad-calculator-fullpage-autocorrect-v1';
+var npAutoCorrectEnabled = true;
+try{
+  var storedAc = localStorage.getItem(NP_AC_ENABLED_KEY);
+  if(storedAc !== null){ npAutoCorrectEnabled = storedAc === '1'; }
+}catch(e){}
+
+function applyAutoCorrectButtonState(){
+  var btn = document.getElementById('npAutoCorrect');
+  btn.textContent = 'Auto-correct: ' + (npAutoCorrectEnabled ? 'On' : 'Off');
+  btn.classList.toggle('on', npAutoCorrectEnabled);
+  btn.classList.toggle('off', !npAutoCorrectEnabled);
+}
+applyAutoCorrectButtonState();
+
+document.getElementById('npAutoCorrect').addEventListener('click', function(){
+  npAutoCorrectEnabled = !npAutoCorrectEnabled;
+  applyAutoCorrectButtonState();
+  try{ localStorage.setItem(NP_AC_ENABLED_KEY, npAutoCorrectEnabled ? '1' : '0'); }catch(e){}
+});
+
+var NP_AC_SKIP_WORDS = {
+  today:1, now:1, sum:1, avg:1, average:1, min:1, max:1, count:1, sqrt:1, cbrt:1, abs:1, ln:1, log:1, log2:1, exp:1,
+  round:1, floor:1, ceil:1, mod:1, fact:1, sin:1, cos:1, tan:1, asin:1, acos:1, atan:1, pi:1, e:1, year:1, month:1,
+  day:1, hour:1, minute:1, second:1, weekday:1, mo:1, usd:1, eur:1, inr:1, gbp:1, km:1, miles:1, lbs:1, kg:1
+};
+
+function maybeAutoCorrectWord(e){
+  if(!npAutoCorrectEnabled){ return; }
+  if(!e || e.inputType !== 'insertText' || e.data !== ' '){ return; }
+  var pos = npInput.selectionStart;
+  if(pos !== npInput.selectionEnd){ return; }
+  var value = npInput.value;
+  var end = pos - 1;
+  if(end < 0 || value[end] !== ' '){ return; }
+  var start = end;
+  while(start > 0 && /[A-Za-z0-9]/.test(value[start - 1])){ start--; }
+  var word = value.slice(start, end);
+  if(!word || word.length < 2){ return; }
+
+  var replacement = word;
+
+  // 1. Correct two initial consecutive capitals (e.g. "THis" -> "This")
+  if(/^([A-Z]{2})([a-z]+)$/.test(replacement)){
+    replacement = replacement.charAt(0) + replacement.charAt(1).toLowerCase() + replacement.slice(2);
+  }
+
+  // 2. Capitalize names of days
+  var daysMap = {
+    'sunday': 'Sunday', 'monday': 'Monday', 'tuesday': 'Tuesday',
+    'wednesday': 'Wednesday', 'thursday': 'Thursday', 'friday': 'Friday', 'saturday': 'Saturday'
+  };
+  if(daysMap[replacement.toLowerCase()]){
+    replacement = daysMap[replacement.toLowerCase()];
+  }
+
+  // 3. Capitalize first letter of sentence (after start of line or [.!?])
+  var contextBefore = value.slice(0, start).trimEnd();
+  var isSentenceStart = (contextBefore.length === 0 || /[.!?]$/.test(contextBefore) || value.slice(0, start).lastIndexOf('\n') === start - 1);
+  if(isSentenceStart && /^[a-z]/.test(replacement)){
+    replacement = replacement.charAt(0).toUpperCase() + replacement.slice(1);
+  }
+
+  // Apply quick auto-corrections immediately
+  if(replacement !== word){
+    var before = value.slice(0, start);
+    var after = value.slice(end);
+    npInput.value = before + replacement + after;
+    var shift = replacement.length - word.length;
+    npInput.selectionStart = npInput.selectionEnd = pos + shift;
+    renderNotepad(); npScheduleSave();
+    return;
+  }
+
+  // 4. Fallback to dictionary spelling suggestions
+  if(word.length < 4 || !/^[A-Za-z]+$/.test(word)){ return; }
+  var lower = word.toLowerCase();
+  if(NP_AC_SKIP_WORDS[lower]){ return; }
+  if(npKnownVars.some(function(v){ return v.toLowerCase() === lower; })){ return; }
+  fetchSpelling(word, function(suggestions){
+    if(!suggestions.length){ return; }
+    var top = suggestions[0];
+    if(top.toLowerCase() === lower){ return; }
+    if(npInput.value.slice(start, end) !== word){ return; }
+    var corrected = top;
+    if(word === word.toUpperCase()){ corrected = top.toUpperCase(); }
+    else if(word[0] === word[0].toUpperCase()){ corrected = top.charAt(0).toUpperCase() + top.slice(1); }
+    var before = value.slice(0, start);
+    var after = value.slice(end);
+    var shift = corrected.length - word.length;
+    var curPos = npInput.selectionStart;
+    npInput.value = before + corrected + after;
+    npInput.selectionStart = npInput.selectionEnd = curPos + shift;
+    renderNotepad(); npScheduleSave();
+  });
+}
+
+function createMirror(){
+  var div = document.createElement('div');
+  var style = div.style;
+  var computed = window.getComputedStyle(npInput);
+  style.position = 'absolute'; style.visibility = 'hidden'; style.top = '0'; style.left = '-9999px'; style.whiteSpace = 'pre';
+  ['fontFamily','fontSize','fontWeight','fontStyle','letterSpacing','lineHeight',
+   'paddingTop','paddingRight','paddingBottom','paddingLeft',
+   'borderTopWidth','borderRightWidth','borderBottomWidth','borderLeftWidth','boxSizing'
+  ].forEach(function(prop){ style[prop] = computed[prop]; });
+  document.body.appendChild(div);
+  return div;
+}
+
+function getCaretCoords(position){
+  if(!npMirrorEl){ npMirrorEl = createMirror(); }
+  var value = npInput.value;
+  npMirrorEl.textContent = value.substring(0, position);
+  var span = document.createElement('span');
+  span.textContent = value.substring(position) || '.';
+  npMirrorEl.appendChild(span);
+  return { top: span.offsetTop, left: span.offsetLeft };
+}
+
+function positionSuggestDropdownAt(pos){
+  var rect = npInput.getBoundingClientRect();
+  var caret = getCaretCoords(pos);
+  var lineHeight = parseInt(window.getComputedStyle(npInput).lineHeight) || 26;
+  var top = rect.top + caret.top + lineHeight - npInput.scrollTop;
+  var left = rect.left + caret.left - npInput.scrollLeft;
+  var maxLeft = window.innerWidth - 270;
+  if(left > maxLeft){ left = maxLeft; } if(left < 8){ left = 8; }
+  var maxTop = window.innerHeight - 40;
+  if(top > maxTop){ top = rect.top + caret.top - npInput.scrollTop - 226; }
+  npSuggestEl.style.top = top + 'px'; npSuggestEl.style.left = left + 'px';
+}
+function positionSuggestDropdown(){ positionSuggestDropdownAt(npInput.selectionStart); }
+
+function renderSuggestList(){
+  if(!npSuggestState.matches.length){
+    npSuggestEl.innerHTML = '<div class="np-sugg-item disabled">No matches found</div>';
+    return;
+  }
+  npSuggestEl.innerHTML = npSuggestState.matches.map(function(name, i){
+    var cls = 'np-sugg-item' + (i === npSuggestState.highlightIndex ? ' active' : '');
+    return '<div class="' + cls + '" data-idx="' + i + '">' + escapeHtml(name) + '</div>';
+  }).join('');
+  Array.prototype.forEach.call(npSuggestEl.querySelectorAll('.np-sugg-item:not(.disabled)'), function(el){
+    el.addEventListener('mousedown', function(e){
+      e.preventDefault();
+      applySuggestion(parseInt(el.getAttribute('data-idx'), 10));
+    });
+  });
+}
+
+function showSuggestions(matches, start, end, mode){
+  npSuggestState.active = true; npSuggestState.mode = mode || 'complete';
+  npSuggestState.matches = matches; npSuggestState.replaceStart = start;
+  npSuggestState.replaceEnd = end; npSuggestState.highlightIndex = 0;
+  renderSuggestList(); positionSuggestDropdownAt(start); npSuggestEl.style.display = 'block';
+}
+
+function hideSuggestions(){ npSuggestState.active = false; npSuggestEl.style.display = 'none'; }
+
+function mergeUnique(lists, excludeLower){
+  var seen = {}; var out = [];
+  lists.forEach(function(list){
+    list.forEach(function(w){
+      var lw = w.toLowerCase();
+      if(seen[lw] || lw === excludeLower){ return; }
+      seen[lw] = true; out.push(w);
+    });
+  });
+  return out.slice(0, 8);
+}
+
+function updateSuggestions(){
+  var pos = npInput.selectionStart;
+  if(pos !== npInput.selectionEnd){ hideSuggestions(); return; }
+  var value = npInput.value;
+  var info = getWordBeforeCaret(value, pos);
+  var word = info.word;
+  if(word.length < 2){ hideSuggestions(); return; }
+  var lower = word.toLowerCase();
+
+  var varMatches = npKnownVars.filter(function(name){
+    return name.toLowerCase().indexOf(lower) === 0 && name.toLowerCase() !== lower;
+  });
+
+  if(varMatches.length){ showSuggestions(varMatches.slice(0, 8), info.start, pos, 'complete'); }
+  else { hideSuggestions(); }
+
+  var myGen = ++npSuggestGen;
+  clearTimeout(npCompletionTimer);
+  npCompletionTimer = setTimeout(function(){
+    fetchCompletions(word, function(words){
+      if(myGen !== npSuggestGen){ return; }
+      var merged = mergeUnique([varMatches, words], lower);
+      if(!merged.length){ hideSuggestions(); return; }
+      showSuggestions(merged, info.start, pos, 'complete');
+    });
+  }, 220);
+}
+
+function applySuggestion(index){
+  var picked = npSuggestState.matches[index];
+  if(!picked){ hideSuggestions(); return; }
+  var value = npInput.value;
+  var before = value.slice(0, npSuggestState.replaceStart);
+  var after = value.slice(npSuggestState.replaceEnd);
+  var inserted = npSuggestState.mode === 'thesaurus' ? picked : (picked + ' ');
+  npInput.value = before + inserted + after;
+  var newPos = before.length + inserted.length;
+  npInput.selectionStart = npInput.selectionEnd = newPos;
+  hideSuggestions(); renderNotepad(); npScheduleSave(); npInput.focus();
+}
+
+document.getElementById('npThesaurus').addEventListener('click', function(){
+  var value = npInput.value;
+  var selStart = npInput.selectionStart, selEnd = npInput.selectionEnd;
+  var start, end, word;
+  if(selEnd > selStart){
+    word = value.slice(selStart, selEnd).trim();
+    start = selStart; end = selEnd;
+  } else {
+    var info = getWordAtCaret(value, selStart);
+    word = info.word; start = info.start; end = info.end;
+  }
+  if(!word){ return; }
+  npInput.focus(); npInput.selectionStart = start; npInput.selectionEnd = end;
+  fetchSynonyms(word, function(syns){ showSuggestions(syns, start, end, 'thesaurus'); });
+});
+
+function flashStatus(msg, ms){
+  npSavedStatus.textContent = msg;
+  setTimeout(function(){ if(npSavedStatus.textContent === msg){ npSavedStatus.textContent = ''; } }, ms || 1400);
+}
+
+document.getElementById('npSpelling').addEventListener('click', function(){
+  var selStart = npInput.selectionStart, selEnd = npInput.selectionEnd;
+  if(selEnd <= selStart){ flashStatus('Select a word or phrase first'); return; }
+  var text = npInput.value.slice(selStart, selEnd).trim();
+  if(!text){ return; }
+  npInput.focus(); npInput.selectionStart = selStart; npInput.selectionEnd = selEnd;
+  fetchSpelling(text, function(suggestions){ showSuggestions(suggestions, selStart, selEnd, 'thesaurus'); });
+});
+
+document.addEventListener('click', function(e){
+  if(e.target === npInput || npSuggestEl.contains(e.target)){ return; }
+  hideSuggestions();
+});
+window.addEventListener('resize', function(){ if(npSuggestState.active){ positionSuggestDropdown(); } });
+
+npInput.addEventListener('keydown', function(e){
+  if(npSuggestState.active){
+    if(e.key === 'ArrowDown' && npSuggestState.matches.length){
+      e.preventDefault();
+      npSuggestState.highlightIndex = (npSuggestState.highlightIndex + 1) % npSuggestState.matches.length;
+      renderSuggestList(); return;
+    }
+    if(e.key === 'ArrowUp' && npSuggestState.matches.length){
+      e.preventDefault();
+      npSuggestState.highlightIndex = (npSuggestState.highlightIndex - 1 + npSuggestState.matches.length) % npSuggestState.matches.length;
+      renderSuggestList(); return;
+    }
+    if((e.key === ' ' || e.key === 'Enter' || e.key === 'Tab') && npSuggestState.matches.length){
+      e.preventDefault(); applySuggestion(npSuggestState.highlightIndex); return;
+    }
+    if(e.key === 'Escape'){ e.preventDefault(); hideSuggestions(); return; }
+  }
+
+  if(e.key !== 'Tab'){ return; }
+  var value = npInput.value;
+  var pos = npInput.selectionStart;
+  var lineStart = value.lastIndexOf('\n', pos - 1) + 1;
+  var lineEnd = value.indexOf('\n', pos);
+  if(lineEnd === -1){ lineEnd = value.length; }
+  var lineIndex = value.slice(0, lineStart).split('\n').length - 1;
+  var evalOut = evaluateNotepad(value);
+  var res = evalOut.results[lineIndex];
+  if(!res){ return; }
+  e.preventDefault();
+  var rawLine = value.slice(lineStart, lineEnd);
+  var trimmed = rawLine.trim();
+  var hasTrailingEq = /=\s*$/.test(trimmed);
+  var valueOnly = res.replace(/^=\s*/, '');
+  var insertText = hasTrailingEq ? (' ' + valueOnly) : (' = ' + valueOnly);
+  npInput.value = value.slice(0, lineEnd) + insertText + value.slice(lineEnd);
+  var newPos = lineEnd + insertText.length;
+  npInput.selectionStart = npInput.selectionEnd = newPos;
+  renderNotepad(); npScheduleSave();
+});
+
+renderNotepad();
+</script>
+</body>
+</html>
