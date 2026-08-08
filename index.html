@@ -47,6 +47,26 @@
   #npFontDown, #npFontUp{ padding: 0 10px; }
   #npClear:active, #npExport:active, #npImportBtn:active, #npCsvBtn:active, #npThesaurus:active, #npSpelling:active, #npAutoCorrect:active, #npFontDown:active, #npFontUp:active{ transform: scale(0.97); }
   #npAutoCorrect.on{ background: var(--accent, #3C3489); border-color: var(--accent, #3C3489); color: #fff; }
+  .np-ts-bright-group{
+    display: flex; align-items: center; gap: 0; margin-left: 8px; flex-shrink: 0;
+    border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
+  }
+  .np-ts-bright-group button{
+    height: 34px; width: 28px; padding: 0; font-size: 14px; font-weight: 700; font-family: var(--font);
+    border: none; background: var(--card); color: var(--text-primary); cursor: pointer;
+  }
+  .np-ts-bright-group button:active{ background: var(--surface-1); }
+  .np-ts-bright-group button:first-child{ border-right: 1px solid var(--border); }
+  .np-ts-bright-group button:last-child{ border-left: 1px solid var(--border); }
+  #npTsBrightValue{
+    height: 34px; width: 46px; border: none; background: var(--card); color: var(--text-primary);
+    font-size: 12px; font-weight: 700; font-family: var(--font); text-align: center;
+    -moz-appearance: textfield;
+  }
+  #npTsBrightValue::-webkit-inner-spin-button, #npTsBrightValue::-webkit-outer-spin-button{
+    -webkit-appearance: none; margin: 0;
+  }
+  .np-ts-bright-suffix{ font-size: 11px; color: var(--text-secondary); padding-right: 8px; background: var(--card); }
   #npAutoCorrect.off{ background: var(--card); color: var(--text-secondary); border-style: dashed; }
   #npSavedStatus{ font-size: 12px; font-weight: 700; color: var(--text-secondary); margin-right: 10px; white-space: nowrap; }
   .status-row{ display:flex; align-items:center; flex-shrink:0; }
@@ -109,8 +129,8 @@
   #npOverlay .ov-result.has-value:hover{ background: var(--surface-1); }
   #npOverlay .ov-result.ov-copied{ background: var(--surface-1); text-decoration: none; }
   #npOverlay .ov-timestamp{
-    color: rgba(0, 229, 255, 0.25);
-    text-shadow: 0 0 6px rgba(0, 229, 255, 0.16), 0 0 12px rgba(0, 229, 255, 0.09);
+    color: rgba(0, 229, 255, var(--np-ts-alpha-main, 0.25));
+    text-shadow: 0 0 6px rgba(0, 229, 255, var(--np-ts-alpha-glow1, 0.16)), 0 0 12px rgba(0, 229, 255, var(--np-ts-alpha-glow2, 0.09));
     font-weight: 700;
     pointer-events: none;
     user-select: none;
@@ -170,6 +190,12 @@
     <span id="npSavedStatus"></span>
     <button id="npFontDown" aria-label="Decrease font size">A-</button>
     <button id="npFontUp" aria-label="Increase font size">A+</button>
+    <div class="np-ts-bright-group" title="Timestamp brightness">
+      <button id="npTsBrightDown" aria-label="Decrease timestamp brightness">-</button>
+      <input type="number" id="npTsBrightValue" min="0" max="100" step="5" aria-label="Timestamp brightness percent" />
+      <span class="np-ts-bright-suffix">%</span>
+      <button id="npTsBrightUp" aria-label="Increase timestamp brightness">+</button>
+    </div>
     <button id="npExport">Export</button>
     <button id="npImportBtn">Import</button>
     <input type="file" id="npImportFile" accept=".txt,text/plain" style="display:none;" />
@@ -987,6 +1013,42 @@ document.getElementById('npFontUp').addEventListener('click', function(){
 document.getElementById('npFontDown').addEventListener('click', function(){
   npFontSize = Math.max(12, npFontSize - 2);
   applyFontSize();
+});
+
+// Timestamp brightness: 0-100%. Original design used a fixed 25% (with the
+// glow layers at 64% / 36% of that main value) -- that ratio is preserved
+// as brightness is turned up or down, so 0% is fully invisible and 100% is
+// fully solid, with the same relative glow look throughout.
+var NP_TS_BRIGHT_KEY = 'notepad-calculator-fullpage-tsbrightness-v1';
+var npTsBrightness = 25;
+try{
+  var storedBright = parseInt(localStorage.getItem(NP_TS_BRIGHT_KEY));
+  if(!isNaN(storedBright) && storedBright >= 0 && storedBright <= 100){ npTsBrightness = storedBright; }
+}catch(e){}
+
+function applyTsBrightness(){
+  npTsBrightness = Math.max(0, Math.min(100, npTsBrightness));
+  var mainAlpha = npTsBrightness / 100;
+  document.documentElement.style.setProperty('--np-ts-alpha-main', mainAlpha.toFixed(3));
+  document.documentElement.style.setProperty('--np-ts-alpha-glow1', (mainAlpha * 0.64).toFixed(3));
+  document.documentElement.style.setProperty('--np-ts-alpha-glow2', (mainAlpha * 0.36).toFixed(3));
+  document.getElementById('npTsBrightValue').value = npTsBrightness;
+  try{ localStorage.setItem(NP_TS_BRIGHT_KEY, npTsBrightness); }catch(e){}
+}
+applyTsBrightness();
+
+document.getElementById('npTsBrightUp').addEventListener('click', function(){
+  npTsBrightness = Math.min(100, npTsBrightness + 5);
+  applyTsBrightness();
+});
+document.getElementById('npTsBrightDown').addEventListener('click', function(){
+  npTsBrightness = Math.max(0, npTsBrightness - 5);
+  applyTsBrightness();
+});
+document.getElementById('npTsBrightValue').addEventListener('change', function(){
+  var v = parseInt(this.value);
+  npTsBrightness = isNaN(v) ? npTsBrightness : v;
+  applyTsBrightness();
 });
 
 function buildExportText(){
