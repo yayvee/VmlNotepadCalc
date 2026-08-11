@@ -110,6 +110,7 @@
     padding: 18px 20px; border: none;
     background: var(--card); color: var(--text-primary); resize: none; outline: none;
     overflow: auto; white-space: pre;
+    z-index: 1;
   }
   #npOverlay{
     position: absolute; inset: 0;
@@ -118,6 +119,7 @@
     white-space: pre;
     pointer-events: none;
     overflow: hidden;
+    z-index: 2;
   }
   #npOverlay .ov-line{ height: var(--np-line-height, 30px); }
   #npOverlay .ov-ghost{ color: transparent; }
@@ -130,13 +132,16 @@
   #npOverlay .ov-result.ov-copied{ background: var(--surface-1); text-decoration: none; }
   #npOverlay .np-line-timer{
     display:inline-flex; align-items:center; gap:5px; margin-left:8px; vertical-align:middle;
-    font:700 12px/24px var(--font); color:var(--text-primary); pointer-events:auto;
+    font:700 12px/24px var(--font); color:var(--text-primary); pointer-events:auto !important; position:relative; z-index:3;
   }
-  #npOverlay .np-line-timer-display{ min-width:72px; font-family:var(--font-mono); color:var(--text-secondary); }
+  #npOverlay .np-line-timer-display{
+    min-width:112px; font-family:var(--font-mono); font-size:var(--np-font-size, 16px);
+    line-height:24px; color:var(--text-secondary);
+  }
   #npOverlay .np-line-timer-note{ max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text-secondary); }
   #npOverlay .np-line-timer button{
     height:24px; padding:0 8px; border:1px solid var(--border); border-radius:6px; background:var(--surface-1);
-    color:var(--text-primary); font:700 11px var(--font); cursor:pointer;
+    color:var(--text-primary); font:700 11px var(--font); cursor:pointer; pointer-events:auto !important; position:relative; z-index:4;
   }
   #npOverlay .np-line-timer button.running{ background:var(--accent, #3C3489); color:#fff; border-color:var(--accent, #3C3489); }
   #npOverlay .np-line-timer-help{ color:var(--text-secondary); font-size:11px; }
@@ -1350,6 +1355,15 @@ npInput.addEventListener('scroll', function(){
   if(npSuggestState.active){ positionSuggestDropdown(); }
 });
 
+// Handle a press (rather than waiting for click): active timer lines are redrawn
+// frequently, and a click can otherwise finish on a button that no longer exists.
+npOverlay.addEventListener('pointerdown', function(e){
+  var timerButton = e.target.closest('[data-line-timer-action]');
+  if(!timerButton){ return; }
+  e.preventDefault();
+  e.stopPropagation();
+  handleLineTimerAction(timerButton.getAttribute('data-line-timer-action'), timerButton.getAttribute('data-line-timer-key'));
+});
 npOverlay.addEventListener('click', function(e){
   var timerButton = e.target.closest('[data-line-timer-action]');
   if(timerButton){
@@ -1993,6 +2007,13 @@ function parseLineDuration(text){
   while((m = re.exec(text))){ found = true; total += parseFloat(m[1]) * ({h:3600000,hr:3600000,hrs:3600000,m:60000,min:60000,mins:60000,s:1000,sec:1000,secs:1000}[m[2].toLowerCase()]); }
   return found ? Math.round(total) : 0;
 }
+function parseScheduleDuration(text){
+  var total = 0, found = false, m;
+  var re = /(\d+(?:\.\d+)?)\s*(years?|yrs?|y|months?|mos?|mo|weeks?|w|days?|d|hours?|hrs?|h|minutes?|mins?|min|m|seconds?|secs?|sec|s)\b/gi;
+  var scale = { y:31557600000, yr:31557600000, yrs:31557600000, year:31557600000, years:31557600000, mo:2629800000, mos:2629800000, month:2629800000, months:2629800000, w:604800000, week:604800000, weeks:604800000, d:86400000, day:86400000, days:86400000, h:3600000, hr:3600000, hrs:3600000, hour:3600000, hours:3600000, m:60000, min:60000, mins:60000, minute:60000, minutes:60000, s:1000, sec:1000, secs:1000, second:1000, seconds:1000 };
+  while((m = re.exec(text))){ found = true; total += parseFloat(m[1]) * scale[m[2].toLowerCase()]; }
+  return found ? Math.round(total) : 0;
+}
 function formatHMSMillis(totalMs){
   totalMs = Math.max(0, Math.floor(totalMs));
   return formatHMS(totalMs / 1000) + '.' + ('00' + (totalMs % 1000)).slice(-3);
@@ -2005,12 +2026,20 @@ function parseLineTimer(rawLine, index){
     type = 'rem'; note = (match[2] || '').trim(); var whenText = match[1].trim();
     var inMatch = whenText.match(/^in\s+(.+)$/i); when = inMatch ? Date.now() + parseLineDuration(inMatch[1]) : new Date(whenText).getTime();
     if(!when || isNaN(when)){ return null; }
+  } else if((match = line.match(/^(every|after)\s+(.+?)\s*\|\s*(.+)$/i))){
+    type = 'calc'; duration = parseScheduleDuration(match[2]);
+    if(!duration){ return null; }
+    return { type:type, key:type + ':' + index + ':' + line, duration:duration, mode:match[1].toLowerCase(), expr:match[3].trim() };
+  } else if((match = line.match(/^(?:at|on)\s+(.+?)\s*\|\s*(.+)$/i))){
+    type = 'calc'; when = new Date(match[1].trim()).getTime();
+    if(!when || isNaN(when)){ return null; }
+    return { type:type, key:type + ':' + index + ':' + line, when:when, mode:'at', expr:match[2].trim() };
   } else { return null; }
   return { type:type, key:type + ':' + index + ':' + line, duration:duration, when:when, note:note };
 }
 function getLineTimer(spec){
   var state = npLineTimers[spec.key];
-  if(!state){ state = npLineTimers[spec.key] = { type:spec.type, duration:spec.duration, when:spec.when, note:spec.note, elapsed:0, started:0, endAt:0, canceled:false, fired:false }; }
+  if(!state){ state = npLineTimers[spec.key] = { type:spec.type, duration:spec.duration, when:spec.when, note:spec.note, mode:spec.mode, expr:spec.expr, elapsed:0, started:0, endAt:0, canceled:false, fired:false, nextAt:spec.type === 'calc' ? (spec.when || (Date.now() + spec.duration)) : 0, lastResult:'', done:false, paused:false, pausedRemaining:0 }; }
   return state;
 }
 function lineTimerMarkup(rawLine, index){
@@ -2025,6 +2054,11 @@ function lineTimerMarkup(rawLine, index){
     var remaining = state.endAt ? Math.max(0, state.endAt - Date.now()) : (state.remaining || state.duration);
     return '<span class="np-line-timer"><span class="np-line-timer-display">' + formatHMS(remaining / 1000) + '</span><button class="' + (state.endAt ? 'running' : '') + '" data-line-timer-action="cd-toggle" data-line-timer-key="' + key + '">' + (state.endAt ? 'Pause' : (state.remaining ? 'Resume' : 'Start')) + '</button><button data-line-timer-action="cd-reset" data-line-timer-key="' + key + '">Reset</button></span>';
   }
+  if(spec.type === 'calc'){
+    var calcLabel = state.canceled ? 'Cancelled' : (state.done ? 'Done' : (state.paused ? 'Paused' : 'Next ' + formatReminderTime(state.nextAt)));
+    if(state.lastResult){ calcLabel += ' • ' + state.lastResult; }
+    return '<span class="np-line-timer"><span class="np-line-timer-note" title="' + escapeHtml(spec.expr) + '">' + escapeHtml(calcLabel) + '</span><button data-line-timer-action="calc-run" data-line-timer-key="' + key + '">Run</button>' + (!state.canceled && !state.done ? '<button class="' + (state.paused ? 'running' : '') + '" data-line-timer-action="calc-pause" data-line-timer-key="' + key + '">' + (state.paused ? 'Resume' : 'Pause') + '</button><button data-line-timer-action="calc-cancel" data-line-timer-key="' + key + '">Cancel</button>' : '') + '</span>';
+  }
   var label = state.canceled ? 'Cancelled' : (state.fired ? 'Done' : 'Due ' + formatReminderTime(state.when));
   return '<span class="np-line-timer"><span class="np-line-timer-note">' + escapeHtml(label + (state.note ? ': ' + state.note : '')) + '</span>' + (!state.canceled && !state.fired ? '<button data-line-timer-action="rem-cancel" data-line-timer-key="' + key + '">Cancel</button>' : '') + '</span>';
 }
@@ -2035,11 +2069,42 @@ function handleLineTimerAction(action, key){
   else if(action === 'cd-toggle'){ if(state.endAt){ state.remaining = Math.max(0, state.endAt - Date.now()); state.endAt = 0; } else { var ms = state.remaining || state.duration; if(ms > 0){ state.endAt = Date.now() + ms; state.remaining = 0; ensureNotificationPermission(); } } }
   else if(action === 'cd-reset'){ state.endAt = 0; state.remaining = 0; }
   else if(action === 'rem-cancel'){ state.canceled = true; }
+  else if(action === 'calc-run'){ runScheduledCalculation(state, key); }
+  else if(action === 'calc-pause'){
+    if(state.paused){ state.nextAt = Date.now() + state.pausedRemaining; state.pausedRemaining = 0; state.paused = false; }
+    else { state.pausedRemaining = Math.max(0, state.nextAt - Date.now()); state.paused = true; }
+  }
+  else if(action === 'calc-cancel'){ state.canceled = true; }
   renderNotepad();
+}
+function runScheduledCalculation(state, key){
+  var parts = key.split(':'); var lineIndex = parseInt(parts[1], 10);
+  var lines = npInput.value.split('\n');
+  if(isNaN(lineIndex) || !lines[lineIndex]){ return; }
+  // Optional destination syntax: "L3 = L1 + L2" writes the calculated value to line 3.
+  var destination = state.expr.match(/^L(\d+)\s*=\s*(.+)$/i);
+  var expression = destination ? destination[2] : state.expr;
+  lines[lineIndex] = expression;
+  var output = evaluateNotepad(lines.join('\n')).results[lineIndex] || 'No result';
+  var value = output.replace(/^=\s*/, '');
+  if(destination){
+    var destinationIndex = parseInt(destination[1], 10) - 1;
+    if(destinationIndex >= 0 && destinationIndex < lines.length && destinationIndex !== lineIndex && value !== 'No result'){
+      var currentText = npInput.value.split('\n');
+      currentText[destinationIndex] = value;
+      npInput.value = currentText.join('\n');
+      npScheduleSave();
+      state.lastResult = 'L' + destination[1] + ' = ' + value;
+    } else {
+      state.lastResult = 'Cannot write to L' + destination[1];
+    }
+  } else { state.lastResult = value; }
+  if(state.mode === 'every'){ state.nextAt = Date.now() + state.duration; }
+  else { state.done = true; }
 }
 function tickLineTimers(){
   var now = Date.now(), changed = false;
-  Object.keys(npLineTimers).forEach(function(key){ var state = npLineTimers[key]; if(state.type === 'cd' && state.endAt && state.endAt <= now){ state.endAt = 0; state.remaining = 0; showAlarm('Countdown finished', 'Your line countdown has reached zero.'); changed = true; } if(state.type === 'rem' && !state.canceled && !state.fired && state.when <= now){ state.fired = true; showAlarm('Reminder', state.note || 'Reminder due'); changed = true; } });
+  Object.keys(npLineTimers).forEach(function(key){ var state = npLineTimers[key]; if(state.type === 'cd' && state.endAt && state.endAt <= now){ state.endAt = 0; state.remaining = 0; showAlarm('Countdown finished', 'Your line countdown has reached zero.'); changed = true; } if(state.type === 'rem' && !state.canceled && !state.fired && state.when <= now){ state.fired = true; showAlarm('Reminder', state.note || 'Reminder due'); changed = true; } if(state.type === 'calc' && !state.canceled && !state.done && !state.paused && state.nextAt <= now){ runScheduledCalculation(state, key); changed = true; } });
   if(changed || Object.keys(npLineTimers).some(function(key){ var s=npLineTimers[key]; return s.started || s.endAt; })){ renderNotepad(); }
 }
 npLineTimerTick = setInterval(tickLineTimers, 100);
