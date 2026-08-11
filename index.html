@@ -176,6 +176,84 @@
   #npSuggest .np-sugg-item.active{ background: var(--surface-1); }
   #npSuggest .np-sugg-item.disabled{ color: var(--text-secondary); cursor: default; opacity: 0.7; }
 
+  .np-timer-panel{
+    position: fixed; top: 64px; right: 16px; width: 300px; z-index: 60;
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.22); padding: 14px; font-family: var(--font);
+  }
+  .np-timer-header{ display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .np-timer-title{ font-size: 14px; font-weight: 700; color: var(--text-primary); }
+  #npTimerClose{
+    border: none; background: transparent; font-size: 18px; line-height: 1; cursor: pointer;
+    color: var(--text-secondary); padding: 0 4px;
+  }
+  .np-timer-tabs{ display: flex; gap: 4px; margin-bottom: 12px; border-bottom: 1px solid var(--border); }
+  .np-timer-tab{
+    flex: 1; border: none; background: transparent; padding: 8px 4px; font-size: 12px; font-weight: 700;
+    color: var(--text-secondary); cursor: pointer; border-bottom: 2px solid transparent;
+  }
+  .np-timer-tab.active{ color: var(--text-primary); border-bottom-color: var(--accent, #3C3489); }
+  .np-timer-section{ display: none; }
+  .np-timer-section.active{ display: block; }
+  .np-timer-display{
+    font-family: var(--font-mono); font-size: 30px; font-weight: 700; text-align: center;
+    color: var(--text-primary); margin: 6px 0 14px; letter-spacing: 1px;
+  }
+  .np-timer-btnrow{ display: flex; gap: 8px; }
+  .np-timer-btnrow button{
+    flex: 1; height: 36px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--surface-1); color: var(--text-primary); font-weight: 700; font-size: 13px; cursor: pointer;
+  }
+  .np-timer-btnrow button:active{ transform: scale(0.97); }
+  .np-timer-btnrow button.running{ background: var(--accent, #3C3489); color: #fff; border-color: var(--accent, #3C3489); }
+  .np-timer-setrow{ display: flex; gap: 8px; margin-bottom: 12px; }
+  .np-timer-field{ flex: 1; text-align: center; }
+  .np-timer-field label{ display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 3px; }
+  .np-timer-field input{
+    width: 100%; height: 34px; text-align: center; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--bg); color: var(--text-primary); font-size: 14px; font-family: var(--font);
+  }
+  .np-timer-field-wide{ text-align: left; margin-bottom: 10px; }
+  .np-timer-field-wide label{ text-align: left; }
+  .np-timer-field-wide input{ text-align: left; padding: 0 10px; }
+  .np-timer-hint{ font-size: 12px; color: var(--text-secondary); margin: 0 0 12px; line-height: 1.4; }
+  .np-timer-quickrow{ display: flex; gap: 6px; margin-bottom: 10px; }
+  .np-timer-quickrow button{
+    flex: 1; height: 28px; border-radius: 6px; border: 1px solid var(--border);
+    background: var(--surface-1); color: var(--text-primary); font-size: 11px; font-weight: 700; cursor: pointer;
+  }
+  .np-timer-addbtn{
+    width: 100%; height: 36px; border-radius: 8px; border: 1px solid var(--accent, #3C3489);
+    background: var(--accent, #3C3489); color: #fff; font-weight: 700; font-size: 13px; cursor: pointer; margin-bottom: 10px;
+  }
+  .np-timer-remlist{ max-height: 160px; overflow-y: auto; }
+  .np-timer-remitem{
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 7px 0; border-top: 1px solid var(--border); font-size: 12px;
+  }
+  .np-timer-remitem:first-child{ border-top: none; }
+  .np-timer-reminfo{ overflow: hidden; }
+  .np-timer-remnote{ font-weight: 700; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .np-timer-remtime{ color: var(--text-secondary); }
+  .np-timer-remcancel{
+    border: none; background: transparent; color: var(--danger); font-size: 12px; font-weight: 700; cursor: pointer; flex-shrink: 0;
+  }
+
+  .np-alarm-overlay{
+    position: fixed; inset: 0; z-index: 100; background: rgba(0,0,0,0.55);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .np-alarm-box{
+    background: var(--card); border-radius: 14px; padding: 28px 32px; text-align: center;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.35); max-width: 320px;
+  }
+  .np-alarm-title{ font-size: 20px; font-weight: 700; color: var(--text-primary); margin-bottom: 8px; }
+  .np-alarm-msg{ font-size: 14px; color: var(--text-secondary); margin-bottom: 18px; word-break: break-word; }
+  #npAlarmDismiss{
+    height: 40px; padding: 0 24px; border-radius: 8px; border: none;
+    background: var(--accent, #3C3489); color: #fff; font-weight: 700; font-size: 14px; cursor: pointer;
+  }
+
   @media (max-width: 560px){
     #npInput, #npOverlay{ padding: 18px 12px; }
   }
@@ -204,6 +282,7 @@
     <button id="npThesaurus" title="Select a word (or click into one), then click here for synonyms">Thesaurus</button>
     <button id="npSpelling" title="Select a word or phrase, then click here for spelling suggestions">Spelling</button>
     <button id="npAutoCorrect" title="Toggle silent auto-correction of misspelled words as you type">Auto-correct: On</button>
+    <button id="npTimerBtn" title="Stopwatch, countdown timer, and reminders">Timer</button>
     <button id="npClear">Clear</button>
   </div>
   <div class="status-row" id="npCsvNav" style="display:none;">
@@ -222,6 +301,71 @@
   </div>
 </main>
 <div id="npSuggest"></div>
+
+<div id="npTimerPanel" class="np-timer-panel" style="display:none;">
+  <div class="np-timer-header">
+    <span class="np-timer-title">Timer</span>
+    <button id="npTimerClose" aria-label="Close timer panel">&times;</button>
+  </div>
+
+  <div class="np-timer-tabs">
+    <button class="np-timer-tab active" data-timertab="stopwatch">Stopwatch</button>
+    <button class="np-timer-tab" data-timertab="countdown">Countdown</button>
+    <button class="np-timer-tab" data-timertab="reminder">Reminder</button>
+  </div>
+
+  <!-- Stopwatch -->
+  <div class="np-timer-section active" id="npSwSection">
+    <div class="np-timer-display" id="npSwDisplay">00:00:00</div>
+    <div class="np-timer-btnrow">
+      <button id="npSwStartPause">Start</button>
+      <button id="npSwReset">Reset</button>
+    </div>
+  </div>
+
+  <!-- Countdown -->
+  <div class="np-timer-section" id="npCdSection">
+    <div class="np-timer-display" id="npCdDisplay">00:00:00</div>
+    <div class="np-timer-setrow" id="npCdSetRow">
+      <div class="np-timer-field"><label>H</label><input type="number" id="npCdH" min="0" max="99" value="0" /></div>
+      <div class="np-timer-field"><label>M</label><input type="number" id="npCdM" min="0" max="59" value="5" /></div>
+      <div class="np-timer-field"><label>S</label><input type="number" id="npCdS" min="0" max="59" value="0" /></div>
+    </div>
+    <div class="np-timer-btnrow">
+      <button id="npCdStartPause">Start</button>
+      <button id="npCdReset">Reset</button>
+    </div>
+  </div>
+
+  <!-- Reminder -->
+  <div class="np-timer-section" id="npRemSection">
+    <p class="np-timer-hint">Set a time, add a short note, and this tab will alert you when it's due (while this page stays open in your browser).</p>
+    <div class="np-timer-field np-timer-field-wide">
+      <label>When</label>
+      <input type="datetime-local" id="npRemWhen" />
+    </div>
+    <div class="np-timer-field np-timer-field-wide">
+      <label>Note</label>
+      <input type="text" id="npRemNote" placeholder="e.g. Call the client" maxlength="80" />
+    </div>
+    <div class="np-timer-quickrow">
+      <button data-remin="5">+5m</button>
+      <button data-remin="10">+10m</button>
+      <button data-remin="30">+30m</button>
+      <button data-remin="60">+1h</button>
+    </div>
+    <button id="npRemAdd" class="np-timer-addbtn">Add reminder</button>
+    <div id="npRemList" class="np-timer-remlist"></div>
+  </div>
+</div>
+
+<div id="npAlarmOverlay" class="np-alarm-overlay" style="display:none;">
+  <div class="np-alarm-box">
+    <div class="np-alarm-title" id="npAlarmTitle">Time's up</div>
+    <div class="np-alarm-msg" id="npAlarmMsg"></div>
+    <button id="npAlarmDismiss">Dismiss</button>
+  </div>
+</div>
 
 <script>
 var npInput = document.getElementById('npInput');
@@ -1546,6 +1690,273 @@ npInput.addEventListener('keydown', function(e){
   npInput.selectionStart = npInput.selectionEnd = newPos;
   renderNotepad(); npScheduleSave();
 });
+
+/* ---------------- Timer panel: Stopwatch, Countdown, Reminder ---------------- */
+var npTimerPanel = document.getElementById('npTimerPanel');
+document.getElementById('npTimerBtn').addEventListener('click', function(){
+  npTimerPanel.style.display = (npTimerPanel.style.display === 'none') ? 'block' : 'none';
+});
+document.getElementById('npTimerClose').addEventListener('click', function(){
+  npTimerPanel.style.display = 'none';
+});
+Array.prototype.forEach.call(document.querySelectorAll('.np-timer-tab'), function(btn){
+  btn.addEventListener('click', function(){
+    var name = btn.getAttribute('data-timertab');
+    Array.prototype.forEach.call(document.querySelectorAll('.np-timer-tab'), function(b){ b.classList.toggle('active', b === btn); });
+    document.getElementById('npSwSection').classList.toggle('active', name === 'stopwatch');
+    document.getElementById('npCdSection').classList.toggle('active', name === 'countdown');
+    document.getElementById('npRemSection').classList.toggle('active', name === 'reminder');
+  });
+});
+
+function pad2t(n){ return (n < 10 ? '0' : '') + n; }
+function formatHMS(totalSeconds){
+  totalSeconds = Math.max(0, Math.round(totalSeconds));
+  var h = Math.floor(totalSeconds / 3600);
+  var m = Math.floor((totalSeconds % 3600) / 60);
+  var s = totalSeconds % 60;
+  return pad2t(h) + ':' + pad2t(m) + ':' + pad2t(s);
+}
+
+// A short beep using Web Audio API -- no external sound file needed, works offline.
+function playAlarmBeep(){
+  try{
+    var Ctx = window.AudioContext || window.webkitAudioContext;
+    var ctx = new Ctx();
+    var playTone = function(delay){
+      var osc = ctx.createOscillator();
+      var gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = 880;
+      gain.gain.setValueAtTime(0.0001, ctx.currentTime + delay);
+      gain.gain.exponentialRampToValueAtTime(0.3, ctx.currentTime + delay + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + delay + 0.35);
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.start(ctx.currentTime + delay);
+      osc.stop(ctx.currentTime + delay + 0.4);
+    };
+    playTone(0); playTone(0.45); playTone(0.9);
+  }catch(e){}
+}
+
+var npNotifPermissionAsked = false;
+function ensureNotificationPermission(){
+  if(npNotifPermissionAsked || !('Notification' in window)){ return; }
+  npNotifPermissionAsked = true;
+  if(Notification.permission === 'default'){ Notification.requestPermission(); }
+}
+function showBrowserNotification(title, body){
+  try{
+    if('Notification' in window && Notification.permission === 'granted'){
+      new Notification(title, { body: body || '' });
+    }
+  }catch(e){}
+}
+
+function showAlarm(title, msg){
+  document.getElementById('npAlarmTitle').textContent = title;
+  document.getElementById('npAlarmMsg').textContent = msg || '';
+  document.getElementById('npAlarmOverlay').style.display = 'flex';
+  playAlarmBeep();
+  showBrowserNotification(title, msg);
+}
+document.getElementById('npAlarmDismiss').addEventListener('click', function(){
+  document.getElementById('npAlarmOverlay').style.display = 'none';
+});
+
+/* ---- Stopwatch ---- */
+var npSwRunning = false;
+var npSwStartedAt = 0;   // timestamp when current run segment started
+var npSwElapsedMs = 0;   // accumulated elapsed time from prior segments
+var npSwTick = null;
+
+function renderSwDisplay(){
+  var current = npSwElapsedMs + (npSwRunning ? (Date.now() - npSwStartedAt) : 0);
+  document.getElementById('npSwDisplay').textContent = formatHMS(current / 1000);
+}
+document.getElementById('npSwStartPause').addEventListener('click', function(){
+  var btn = this;
+  if(npSwRunning){
+    npSwElapsedMs += Date.now() - npSwStartedAt;
+    npSwRunning = false;
+    clearInterval(npSwTick);
+    btn.textContent = 'Start';
+    btn.classList.remove('running');
+  } else {
+    npSwStartedAt = Date.now();
+    npSwRunning = true;
+    npSwTick = setInterval(renderSwDisplay, 250);
+    btn.textContent = 'Pause';
+    btn.classList.add('running');
+    ensureNotificationPermission();
+  }
+});
+document.getElementById('npSwReset').addEventListener('click', function(){
+  npSwRunning = false;
+  npSwElapsedMs = 0;
+  clearInterval(npSwTick);
+  var btn = document.getElementById('npSwStartPause');
+  btn.textContent = 'Start';
+  btn.classList.remove('running');
+  renderSwDisplay();
+});
+
+/* ---- Countdown ---- */
+var NP_CD_KEY = 'notepad-calculator-fullpage-countdown-v1';
+var npCdEndAt = null;    // absolute target timestamp, or null when not running
+var npCdRemainMs = 0;    // remaining ms when paused
+var npCdTick = null;
+
+function saveCdState(){
+  try{ localStorage.setItem(NP_CD_KEY, JSON.stringify({ endAt: npCdEndAt, remainMs: npCdRemainMs })); }catch(e){}
+}
+function renderCdDisplay(){
+  var remaining = npCdEndAt !== null ? (npCdEndAt - Date.now()) : npCdRemainMs;
+  if(remaining <= 0){ remaining = 0; }
+  document.getElementById('npCdDisplay').textContent = formatHMS(remaining / 1000);
+  return remaining;
+}
+function cdTickFn(){
+  var remaining = renderCdDisplay();
+  if(remaining <= 0 && npCdEndAt !== null){
+    npCdEndAt = null; npCdRemainMs = 0;
+    clearInterval(npCdTick);
+    var btn = document.getElementById('npCdStartPause');
+    btn.textContent = 'Start'; btn.classList.remove('running');
+    document.getElementById('npCdSetRow').style.display = 'flex';
+    saveCdState();
+    showAlarm('Countdown finished', 'Your countdown timer has reached zero.');
+  }
+}
+document.getElementById('npCdStartPause').addEventListener('click', function(){
+  var btn = this;
+  if(npCdEndAt !== null){
+    // pause
+    npCdRemainMs = Math.max(0, npCdEndAt - Date.now());
+    npCdEndAt = null;
+    clearInterval(npCdTick);
+    btn.textContent = 'Resume'; btn.classList.remove('running');
+    saveCdState();
+  } else {
+    var startMs = npCdRemainMs > 0 ? npCdRemainMs : (
+      (parseInt(document.getElementById('npCdH').value) || 0) * 3600000 +
+      (parseInt(document.getElementById('npCdM').value) || 0) * 60000 +
+      (parseInt(document.getElementById('npCdS').value) || 0) * 1000
+    );
+    if(startMs <= 0){ return; }
+    npCdEndAt = Date.now() + startMs;
+    npCdRemainMs = 0;
+    document.getElementById('npCdSetRow').style.display = 'none';
+    npCdTick = setInterval(cdTickFn, 250);
+    btn.textContent = 'Pause'; btn.classList.add('running');
+    renderCdDisplay();
+    saveCdState();
+    ensureNotificationPermission();
+  }
+});
+document.getElementById('npCdReset').addEventListener('click', function(){
+  npCdEndAt = null; npCdRemainMs = 0;
+  clearInterval(npCdTick);
+  var btn = document.getElementById('npCdStartPause');
+  btn.textContent = 'Start'; btn.classList.remove('running');
+  document.getElementById('npCdSetRow').style.display = 'flex';
+  renderCdDisplay();
+  saveCdState();
+});
+(function restoreCountdown(){
+  try{
+    var saved = JSON.parse(localStorage.getItem(NP_CD_KEY) || 'null');
+    if(!saved){ return; }
+    if(saved.endAt){
+      var remaining = saved.endAt - Date.now();
+      if(remaining > 0){
+        npCdEndAt = saved.endAt;
+        document.getElementById('npCdSetRow').style.display = 'none';
+        var btn = document.getElementById('npCdStartPause');
+        btn.textContent = 'Pause'; btn.classList.add('running');
+        npCdTick = setInterval(cdTickFn, 250);
+        renderCdDisplay();
+      }
+    } else if(saved.remainMs > 0){
+      npCdRemainMs = saved.remainMs;
+      document.getElementById('npCdSetRow').style.display = 'none';
+      document.getElementById('npCdStartPause').textContent = 'Resume';
+      renderCdDisplay();
+    }
+  }catch(e){}
+})();
+
+/* ---- Reminders ---- */
+var NP_REM_KEY = 'notepad-calculator-fullpage-reminders-v1';
+var npReminders = [];
+try{ npReminders = JSON.parse(localStorage.getItem(NP_REM_KEY) || '[]'); }catch(e){ npReminders = []; }
+
+function saveReminders(){
+  try{ localStorage.setItem(NP_REM_KEY, JSON.stringify(npReminders)); }catch(e){}
+}
+function formatReminderTime(ts){
+  var d = new Date(ts);
+  return d.getFullYear() + '/' + pad2t(d.getMonth() + 1) + '/' + pad2t(d.getDate()) + ' ' + pad2t(d.getHours()) + ':' + pad2t(d.getMinutes());
+}
+function renderReminderList(){
+  var host = document.getElementById('npRemList');
+  var pending = npReminders.filter(function(r){ return !r.fired; }).sort(function(a,b){ return a.time - b.time; });
+  if(!pending.length){
+    host.innerHTML = '<p class="np-timer-hint" style="margin:0;">No reminders set.</p>';
+    return;
+  }
+  host.innerHTML = pending.map(function(r){
+    return '<div class="np-timer-remitem" data-id="' + r.id + '">' +
+      '<div class="np-timer-reminfo"><div class="np-timer-remnote">' + escapeHtml(r.note || '(no note)') + '</div>' +
+      '<div class="np-timer-remtime">' + formatReminderTime(r.time) + '</div></div>' +
+      '<button class="np-timer-remcancel" data-cancel="' + r.id + '">Cancel</button></div>';
+  }).join('');
+  Array.prototype.forEach.call(host.querySelectorAll('[data-cancel]'), function(btn){
+    btn.addEventListener('click', function(){
+      var id = btn.getAttribute('data-cancel');
+      npReminders = npReminders.filter(function(r){ return String(r.id) !== id; });
+      saveReminders();
+      renderReminderList();
+    });
+  });
+}
+
+Array.prototype.forEach.call(document.querySelectorAll('[data-remin]'), function(btn){
+  btn.addEventListener('click', function(){
+    var mins = parseInt(btn.getAttribute('data-remin'), 10);
+    var target = new Date(Date.now() + mins * 60000);
+    var pad = function(n){ return (n < 10 ? '0' : '') + n; };
+    var localVal = target.getFullYear() + '-' + pad(target.getMonth() + 1) + '-' + pad(target.getDate()) + 'T' + pad(target.getHours()) + ':' + pad(target.getMinutes());
+    document.getElementById('npRemWhen').value = localVal;
+  });
+});
+
+document.getElementById('npRemAdd').addEventListener('click', function(){
+  var whenVal = document.getElementById('npRemWhen').value;
+  var noteVal = document.getElementById('npRemNote').value.trim();
+  if(!whenVal){ return; }
+  var ts = new Date(whenVal).getTime();
+  if(isNaN(ts) || ts <= Date.now()){ return; }
+  npReminders.push({ id: Date.now() + '-' + Math.random().toString(36).slice(2, 7), time: ts, note: noteVal, fired: false });
+  saveReminders();
+  renderReminderList();
+  document.getElementById('npRemNote').value = '';
+  ensureNotificationPermission();
+});
+
+function checkReminders(){
+  var now = Date.now();
+  var due = npReminders.filter(function(r){ return !r.fired && r.time <= now; });
+  if(!due.length){ return; }
+  due.forEach(function(r){ r.fired = true; });
+  saveReminders();
+  renderReminderList();
+  due.forEach(function(r){
+    showAlarm('Reminder', r.note || 'Reminder due');
+  });
+}
+setInterval(checkReminders, 1000);
+renderReminderList();
 
 renderNotepad();
 </script>
