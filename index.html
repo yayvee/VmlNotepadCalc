@@ -984,21 +984,21 @@ function evaluateNotepad(text){
       return;
     }
 
-    // Resolve Range formulas over earlier lines
-    var rangeOk = true;
+    // Resolve Range formulas over earlier lines. A line inside a range (or a
+    // bare L# reference) that's out of bounds, not yet computed, or holds no
+    // numeric value (blank line, text-only line, etc) counts as 0 rather than
+    // voiding the whole formula.
     function rangeValues(a, b){
       var s = parseInt(a, 10) - 1, en = parseInt(b, 10) - 1;
       if(s > en){ var t = s; s = en; en = t; }
       var vals = [];
       for(var i = s; i <= en; i++){
-        if(i < 0 || i >= idx || lineValues[i] === undefined){ return null; }
-        vals.push(lineValues[i]);
+        vals.push((i >= 0 && i < idx && lineValues[i] !== undefined) ? lineValues[i] : 0);
       }
       return vals;
     }
     var withFuncRanges = exprText.replace(/\b(sum|avg|average|min|max|count)\s*\(\s*L(\d+)\s*(?:to|:)\s*L(\d+)\s*\)/gi, function(m, fn, a, b){
       var vals = rangeValues(a, b);
-      if(!vals){ rangeOk = false; return '0'; }
       var lower = fn.toLowerCase();
       if(lower === 'sum'){ return '(' + vals.join('+') + ')'; }
       if(lower === 'avg' || lower === 'average'){ return '((' + vals.join('+') + ')/' + vals.length + ')'; }
@@ -1007,24 +1007,17 @@ function evaluateNotepad(text){
       if(lower === 'count'){ return String(vals.length); }
       return '0';
     });
-    if(!rangeOk){ results.push(''); lineValues.push(undefined); return; }
 
     var withBareRanges = withFuncRanges.replace(/\bL(\d+)\s*(?:to|:)\s*L(\d+)\b/gi, function(m, a, b){
       var vals = rangeValues(a, b);
-      if(!vals){ rangeOk = false; return '0'; }
       return '(' + vals.join('+') + ')';
     });
-    if(!rangeOk){ results.push(''); lineValues.push(undefined); return; }
 
-    var lineRefOk = true;
     var withLineRefs = withBareRanges.replace(/\bL(\d+)\b/gi, function(match, numStr){
       var refIdx = parseInt(numStr, 10) - 1;
-      if(refIdx < 0 || refIdx >= idx || lineValues[refIdx] === undefined){
-        lineRefOk = false; return '0';
-      }
-      return '(' + lineValues[refIdx] + ')';
+      var v = (refIdx >= 0 && refIdx < idx && lineValues[refIdx] !== undefined) ? lineValues[refIdx] : 0;
+      return '(' + v + ')';
     });
-    if(!lineRefOk){ results.push(''); lineValues.push(undefined); return; }
 
     try{
       var safe = withLineRefs.replace(/(\d+(\.\d+)?)!/g, 'fact($1)');
@@ -1062,6 +1055,7 @@ function renderNotepad(){
   npKnownVars = Object.keys(evalOut.scope);
   var tsChanged = false;
   var nextTimestamps = [];
+  npLineTimerSeenKeys = {};
   var html = lines.map(function(rawLine, i){
     var res = results[i] || '';
     var ghostText = rawLine.length ? rawLine : ' ';
@@ -1123,6 +1117,7 @@ function renderNotepad(){
   npOverlay.innerHTML = html;
   npLineTimestamps = nextTimestamps;
   if(tsChanged){ npScheduleTsSave(); }
+  pruneLineTimers();
 
   var gutterHtml = lines.map(function(_, i){ return '<div>' + (i + 1) + '</div>'; }).join('');
   npGutter.innerHTML = gutterHtml;
@@ -1996,8 +1991,46 @@ renderReminderList();
      countdown 5m       (also: timer 1:30, countdown 1h 20m)
      remind in 10m | Stretch
      remind 2026-08-12 14:30 | Call the client
+     every 1d | L2 = L2 + L1     (recurring calc, writes result back into a line)
+     at 2026-08-13 09:00 | L2 = L2 + L1
+
+   Schedules for these in-line timers now persist across reloads/tabs (see
+   NP_LINE_TIMER_KEY below), so an "every 1d" accumulator keeps its original
+   countdown instead of resetting to "1 day from now" every time the page loads.
+
+   The part after "|" accepts any expression the normal engine supports
+   (any number of L# refs, sum/avg/min/max/count over a range, vars, units,
+   dates, etc), and those refs can point to ANY line -- above or below the
+   timer line itself. Chain several outputs in one timer by separating
+   statements with ";":
+     every 1d | L6 = L1 + L2 + L3 + L4 + L5
+     every 1d | L7 = sum(L1 to L5); L8 = avg(L1 to L5); L2 = L2 + L7
 */
+var NP_LINE_TIMER_KEY = 'notepad-calculator-fullpage-linetimers-v1';
 var npLineTimers = {};
+try{
+  var storedLineTimers = localStorage.getItem(NP_LINE_TIMER_KEY);
+  npLineTimers = storedLineTimers ? JSON.parse(storedLineTimers) : {};
+}catch(e){ npLineTimers = {}; }
+var npLineTimerSaveTimer = null;
+function scheduleLineTimerSave(){
+  clearTimeout(npLineTimerSaveTimer);
+  npLineTimerSaveTimer = setTimeout(function(){
+    try{ localStorage.setItem(NP_LINE_TIMER_KEY, JSON.stringify(npLineTimers)); }catch(e){}
+  }, 300);
+}
+// Tracks which timer keys are still present on the current render pass, so
+// entries for lines that were edited or deleted get pruned from storage
+// instead of accumulating forever.
+var npLineTimerSeenKeys = null;
+function pruneLineTimers(){
+  if(!npLineTimerSeenKeys){ return; }
+  var changed = false;
+  Object.keys(npLineTimers).forEach(function(key){
+    if(!npLineTimerSeenKeys[key]){ delete npLineTimers[key]; changed = true; }
+  });
+  if(changed){ scheduleLineTimerSave(); }
+}
 var npLineTimerTick = null;
 function parseLineDuration(text){
   var clock = text.match(/^(\d+):(\d{2})(?::(\d{2}))?$/);
@@ -2045,6 +2078,7 @@ function getLineTimer(spec){
 function lineTimerMarkup(rawLine, index){
   var spec = parseLineTimer(rawLine, index);
   if(!spec){ return ''; }
+  if(npLineTimerSeenKeys){ npLineTimerSeenKeys[spec.key] = true; }
   var state = getLineTimer(spec), key = escapeHtml(spec.key);
   if(spec.type === 'sw'){
     var elapsed = state.elapsed + (state.started ? Date.now() - state.started : 0);
@@ -2075,36 +2109,58 @@ function handleLineTimerAction(action, key){
     else { state.pausedRemaining = Math.max(0, state.nextAt - Date.now()); state.paused = true; }
   }
   else if(action === 'calc-cancel'){ state.canceled = true; }
+  scheduleLineTimerSave();
   renderNotepad();
 }
 function runScheduledCalculation(state, key){
   var parts = key.split(':'); var lineIndex = parseInt(parts[1], 10);
   var lines = npInput.value.split('\n');
   if(isNaN(lineIndex) || !lines[lineIndex]){ return; }
-  // Optional destination syntax: "L3 = L1 + L2" writes the calculated value to line 3.
-  var destination = state.expr.match(/^L(\d+)\s*=\s*(.+)$/i);
-  var expression = destination ? destination[2] : state.expr;
-  lines[lineIndex] = expression;
-  var output = evaluateNotepad(lines.join('\n')).results[lineIndex] || 'No result';
-  var value = output.replace(/^=\s*/, '');
-  if(destination){
-    var destinationIndex = parseInt(destination[1], 10) - 1;
-    if(destinationIndex >= 0 && destinationIndex < lines.length && destinationIndex !== lineIndex && value !== 'No result'){
-      var currentText = npInput.value.split('\n');
-      currentText[destinationIndex] = value;
-      npInput.value = currentText.join('\n');
-      npScheduleSave();
-      state.lastResult = 'L' + destination[1] + ' = ' + value;
+
+  // The part after "|" can hold ANY expression, referencing ANY number of lines
+  // in ANY position (above or below the timer line) -- e.g. sum(L1 to L9), or
+  // "L2+L4+L7+sqrt(L9)". Multiple outputs are supported by separating statements
+  // with ";" -- e.g.  every 1d | L2 = L2 + L1; L6 = avg(L1 to L5)
+  // Each statement is evaluated by appending it as a scratch line AFTER the whole
+  // current buffer (so it can see every line, regardless of where the timer line
+  // itself sits), then -- if it has a "Ldest = " prefix -- its result is written
+  // back into that destination line before the next statement runs, so later
+  // statements can chain off earlier ones in the same tick.
+  var statements = state.expr.split(/;+/).map(function(s){ return s.trim(); }).filter(Boolean);
+  if(!statements.length){ statements = [state.expr.trim()]; }
+  var currentText = npInput.value.split('\n');
+  var summaryParts = [];
+  statements.forEach(function(stmt){
+    var destination = stmt.match(/^L(\d+)\s*=\s*(.+)$/i);
+    var expression = destination ? destination[2] : stmt;
+    var scratch = currentText.slice();
+    scratch.push(expression);
+    var scratchIdx = scratch.length - 1;
+    var output = evaluateNotepad(scratch.join('\n')).results[scratchIdx] || '';
+    var value = output.replace(/^=\s*/, '');
+    if(destination){
+      var destinationIndex = parseInt(destination[1], 10) - 1;
+      if(destinationIndex >= 0 && destinationIndex < currentText.length && value !== ''){
+        currentText[destinationIndex] = value;
+        summaryParts.push('L' + destination[1] + ' = ' + value);
+      } else {
+        summaryParts.push('Cannot write to L' + destination[1]);
+      }
     } else {
-      state.lastResult = 'Cannot write to L' + destination[1];
+      summaryParts.push(value !== '' ? value : 'No result');
     }
-  } else { state.lastResult = value; }
+  });
+  npInput.value = currentText.join('\n');
+  npScheduleSave();
+  state.lastResult = summaryParts.join(', ');
   if(state.mode === 'every'){ state.nextAt = Date.now() + state.duration; }
   else { state.done = true; }
+  scheduleLineTimerSave();
 }
 function tickLineTimers(){
   var now = Date.now(), changed = false;
   Object.keys(npLineTimers).forEach(function(key){ var state = npLineTimers[key]; if(state.type === 'cd' && state.endAt && state.endAt <= now){ state.endAt = 0; state.remaining = 0; showAlarm('Countdown finished', 'Your line countdown has reached zero.'); changed = true; } if(state.type === 'rem' && !state.canceled && !state.fired && state.when <= now){ state.fired = true; showAlarm('Reminder', state.note || 'Reminder due'); changed = true; } if(state.type === 'calc' && !state.canceled && !state.done && !state.paused && state.nextAt <= now){ runScheduledCalculation(state, key); changed = true; } });
+  if(changed){ scheduleLineTimerSave(); }
   if(changed || Object.keys(npLineTimers).some(function(key){ var s=npLineTimers[key]; return s.started || s.endAt; })){ renderNotepad(); }
 }
 npLineTimerTick = setInterval(tickLineTimers, 100);
