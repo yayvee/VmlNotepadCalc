@@ -1995,6 +1995,7 @@ renderReminderList();
      remind 2026-08-12 14:30 | Call the client
      every 1d | L2 = L2 + L1     (recurring calc, writes result back into a line)
      at 2026-08-13 09:00 | L2 = L2 + L1
+     after 1m every 1s | L3 = L3 + 2   (wait 1m, THEN repeat every 1s)
 
    Schedules for these in-line timers now persist across reloads/tabs (see
    NP_LINE_TIMER_KEY below), so an "every 1d" accumulator keeps its original
@@ -2061,6 +2062,14 @@ function parseLineTimer(rawLine, index){
     type = 'rem'; note = (match[2] || '').trim(); var whenText = match[1].trim();
     var inMatch = whenText.match(/^in\s+(.+)$/i); when = inMatch ? Date.now() + parseLineDuration(inMatch[1]) : new Date(whenText).getTime();
     if(!when || isNaN(when)){ return null; }
+  } else if((match = line.match(/^after\s+(.+?)\s+every\s+(.+?)\s*\|\s*(.+)$/i))){
+    // Compound form: wait an initial delay, then repeat on a (usually shorter)
+    // interval after that -- e.g. "after 1m every 1s | L3=L3+2".
+    type = 'calc';
+    var initialDelay = parseScheduleDuration(match[1].trim());
+    var everyDuration = parseScheduleDuration(match[2].trim());
+    if(!initialDelay || !everyDuration){ return null; }
+    return { type:type, key:type + ':' + index + ':' + line, duration:everyDuration, initialDelay:initialDelay, mode:'every', expr:match[3].trim() };
   } else if((match = line.match(/^(every|after)\s+(.+?)\s*\|\s*(.+)$/i))){
     type = 'calc'; duration = parseScheduleDuration(match[2]);
     if(!duration){ return null; }
@@ -2074,7 +2083,12 @@ function parseLineTimer(rawLine, index){
 }
 function getLineTimer(spec){
   var state = npLineTimers[spec.key];
-  if(!state){ state = npLineTimers[spec.key] = { type:spec.type, duration:spec.duration, when:spec.when, note:spec.note, mode:spec.mode, expr:spec.expr, elapsed:0, started:0, endAt:0, canceled:false, fired:false, nextAt:spec.type === 'calc' ? (spec.when || (Date.now() + spec.duration)) : 0, lastResult:'', done:false, paused:false, pausedRemaining:0 }; }
+  if(!state){
+    var firstNextAt = spec.type === 'calc'
+      ? (spec.when || (Date.now() + (spec.initialDelay !== undefined ? spec.initialDelay : spec.duration)))
+      : 0;
+    state = npLineTimers[spec.key] = { type:spec.type, duration:spec.duration, when:spec.when, note:spec.note, mode:spec.mode, expr:spec.expr, elapsed:0, started:0, endAt:0, canceled:false, fired:false, nextAt:firstNextAt, lastResult:'', done:false, paused:false, pausedRemaining:0 };
+  }
   return state;
 }
 function lineTimerMarkup(rawLine, index){
