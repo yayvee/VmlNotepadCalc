@@ -781,9 +781,11 @@ function parseDateToken(str, dateScope){
   return isNaN(d.getTime()) ? null : d;
 }
 
+var NP_DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 function formatDateOut(d, hasTime){
   var s = d.getFullYear() + '/' + pad2(d.getMonth() + 1) + '/' + pad2(d.getDate());
   if(hasTime){ s += '/' + pad2(d.getHours()) + ':' + pad2(d.getMinutes()) + ':' + pad2(d.getSeconds()); }
+  s += ' (' + NP_DAY_NAMES[d.getDay()] + ')';
   return s;
 }
 
