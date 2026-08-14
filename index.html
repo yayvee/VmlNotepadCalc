@@ -2071,7 +2071,17 @@ function formatHMSMillis(totalMs){
 function parseLineTimer(rawLine, index){
   var line = rawLine.trim(), match, type, duration = 0, when = 0, note = '';
   if(/^(?:sw|stopwatch)\b/i.test(line)){ type = 'sw'; }
-  else if((match = line.match(/^(?:cd|countdown|timer)\s+(.+)$/i))){ type = 'cd'; duration = parseLineDuration(match[1].trim()); if(!duration){ return null; } }
+  else if((match = line.match(/^(?:cd|countdown|timer)\s+(.+)$/i))){
+    type = 'cd';
+    var cdRest = match[1];
+    var cdExpr = null;
+    var pipeIdx = cdRest.indexOf('|');
+    var cdDurationText = pipeIdx !== -1 ? cdRest.slice(0, pipeIdx) : cdRest;
+    if(pipeIdx !== -1){ cdExpr = cdRest.slice(pipeIdx + 1).trim(); }
+    duration = parseLineDuration(cdDurationText.trim());
+    if(!duration){ return null; }
+    return { type:type, key:type + ':' + index + ':' + line, duration:duration, when:when, note:note, expr:cdExpr };
+  }
   else if((match = line.match(/^(?:remind|reminder)\s+(.+?)(?:\s*\|\s*(.*))?$/i))){
     type = 'rem'; note = (match[2] || '').trim(); var whenText = match[1].trim();
     var inMatch = whenText.match(/^in\s+(.+)$/i); when = inMatch ? Date.now() + parseLineDuration(inMatch[1]) : new Date(whenText).getTime();
@@ -2101,7 +2111,7 @@ function getLineTimer(spec){
     var firstNextAt = spec.type === 'calc'
       ? (spec.when || (Date.now() + (spec.initialDelay !== undefined ? spec.initialDelay : spec.duration)))
       : 0;
-    state = npLineTimers[spec.key] = { type:spec.type, duration:spec.duration, initialDelay:spec.initialDelay, when:spec.when, note:spec.note, mode:spec.mode, expr:spec.expr, elapsed:0, started:0, endAt:0, canceled:false, fired:false, nextAt:firstNextAt, lastResult:'', done:false, paused:false, pausedRemaining:0 };
+    state = npLineTimers[spec.key] = { type:spec.type, duration:spec.duration, initialDelay:spec.initialDelay, when:spec.when, note:spec.note, mode:spec.mode, expr:spec.expr, elapsed:0, started:0, endAt:0, canceled:false, fired:false, nextAt:firstNextAt, lastResult:'', done:false, paused:false, pausedRemaining:0, firstRunDone:false };
   }
   return state;
 }
@@ -2116,7 +2126,8 @@ function lineTimerMarkup(rawLine, index){
   }
   if(spec.type === 'cd'){
     var remaining = state.endAt ? Math.max(0, state.endAt - Date.now()) : (state.remaining || state.duration);
-    return '<span class="np-line-timer"><span class="np-line-timer-display">' + formatHMS(remaining / 1000) + '</span><button class="' + (state.endAt ? 'running' : '') + '" data-line-timer-action="cd-toggle" data-line-timer-key="' + key + '">' + (state.endAt ? 'Pause' : (state.remaining ? 'Resume' : 'Start')) + '</button><button data-line-timer-action="cd-reset" data-line-timer-key="' + key + '">Reset</button></span>';
+    var cdNote = (spec.expr && state.lastResult) ? ('<span class="np-line-timer-note" title="' + escapeHtml(spec.expr) + '">' + escapeHtml(state.lastResult) + '</span>') : '';
+    return '<span class="np-line-timer"><span class="np-line-timer-display">' + formatHMS(remaining / 1000) + '</span>' + cdNote + '<button class="' + (state.endAt ? 'running' : '') + '" data-line-timer-action="cd-toggle" data-line-timer-key="' + key + '">' + (state.endAt ? 'Pause' : (state.remaining ? 'Resume' : 'Start')) + '</button><button data-line-timer-action="cd-reset" data-line-timer-key="' + key + '">Reset</button></span>';
   }
   if(spec.type === 'calc'){
     var calcLabel;
@@ -2138,7 +2149,7 @@ function handleLineTimerAction(action, key){
   if(action === 'sw-toggle'){ if(state.started){ state.elapsed += Date.now() - state.started; state.started = 0; } else { state.started = Date.now(); ensureNotificationPermission(); } }
   else if(action === 'sw-reset'){ state.elapsed = 0; state.started = 0; }
   else if(action === 'cd-toggle'){ if(state.endAt){ state.remaining = Math.max(0, state.endAt - Date.now()); state.endAt = 0; } else { var ms = state.remaining || state.duration; if(ms > 0){ state.endAt = Date.now() + ms; state.remaining = 0; ensureNotificationPermission(); } } }
-  else if(action === 'cd-reset'){ state.endAt = 0; state.remaining = 0; }
+  else if(action === 'cd-reset'){ state.endAt = 0; state.remaining = 0; state.lastResult = ''; }
   else if(action === 'rem-cancel'){ state.canceled = true; }
   else if(action === 'calc-run'){ runScheduledCalculation(state, key); }
   else if(action === 'calc-pause'){
@@ -2148,28 +2159,25 @@ function handleLineTimerAction(action, key){
   else if(action === 'calc-cancel'){ state.canceled = true; }
   else if(action === 'calc-reset'){
     state.canceled = false; state.done = false; state.paused = false; state.pausedRemaining = 0;
-    state.lastResult = '';
+    state.lastResult = ''; state.firstRunDone = false;
     state.nextAt = Date.now() + (state.initialDelay !== undefined ? state.initialDelay : state.duration);
   }
   scheduleLineTimerSave();
   renderNotepad();
 }
-function runScheduledCalculation(state, key){
-  var parts = key.split(':'); var lineIndex = parseInt(parts[1], 10);
-  var lines = npInput.value.split('\n');
-  if(isNaN(lineIndex) || !lines[lineIndex]){ return; }
-
-  // The part after "|" can hold ANY expression, referencing ANY number of lines
-  // in ANY position (above or below the timer line) -- e.g. sum(L1 to L9), or
-  // "L2+L4+L7+sqrt(L9)". Multiple outputs are supported by separating statements
-  // with ";" -- e.g.  every 1d | L2 = L2 + L1; L6 = avg(L1 to L5)
-  // Each statement is evaluated by appending it as a scratch line AFTER the whole
-  // current buffer (so it can see every line, regardless of where the timer line
-  // itself sits), then -- if it has a "Ldest = " prefix -- its result is written
-  // back into that destination line before the next statement runs, so later
-  // statements can chain off earlier ones in the same tick.
-  var statements = state.expr.split(/;+/).map(function(s){ return s.trim(); }).filter(Boolean);
-  if(!statements.length){ statements = [state.expr.trim()]; }
+function runTimerExprStatements(exprText){
+  // Shared by scheduled calc timers (every/at/after...every) and countdown
+  // completion expressions. The expression can hold ANY formula, referencing
+  // ANY number of lines in ANY position -- e.g. sum(L1 to L9), or
+  // "L2+L4+L7+sqrt(L9)". Multiple outputs are supported by separating
+  // statements with ";" -- e.g.  L2 = L2 + L1; L6 = avg(L1 to L5)
+  // Each statement is evaluated by appending it as a scratch line AFTER the
+  // whole current buffer (so it can see every line, regardless of where the
+  // timer line itself sits), then -- if it has a "Ldest = " prefix -- its
+  // result is written back into that destination line before the next
+  // statement runs, so later statements can chain off earlier ones.
+  var statements = exprText.split(/;+/).map(function(s){ return s.trim(); }).filter(Boolean);
+  if(!statements.length){ statements = [exprText.trim()]; }
   var currentText = npInput.value.split('\n');
   var summaryParts = [];
   statements.forEach(function(stmt){
@@ -2186,7 +2194,7 @@ function runScheduledCalculation(state, key){
         currentText[destinationIndex] = value;
         summaryParts.push('L' + destination[1] + ' = ' + value);
       } else {
-        summaryParts.push('Cannot write to L' + destination[1]);
+        summaryParts.push('Cannot write to L' + destination[1] + ' (only ' + currentText.length + ' lines exist)');
       }
     } else {
       summaryParts.push(value !== '' ? value : 'No result');
@@ -2194,14 +2202,29 @@ function runScheduledCalculation(state, key){
   });
   npInput.value = currentText.join('\n');
   npScheduleSave();
-  state.lastResult = summaryParts.join(', ');
+  return summaryParts.join(', ');
+}
+function runScheduledCalculation(state, key){
+  var parts = key.split(':'); var lineIndex = parseInt(parts[1], 10);
+  var lines = npInput.value.split('\n');
+  if(isNaN(lineIndex) || !lines[lineIndex]){ return; }
+  state.lastResult = runTimerExprStatements(state.expr);
+  // For an "after <delay> every <interval>" timer, the FIRST run is the moment
+  // the initial wait ends and the recurring cycle begins -- show the same
+  // finished-popup a plain countdown would, as the visible/audible signal that
+  // the "every <interval>" phase has now started. Subsequent every-interval
+  // runs stay silent so a fast interval (e.g. every 1s) doesn't spam alerts.
+  if(!state.firstRunDone && state.initialDelay !== undefined){
+    showAlarm('Countdown finished', 'Now repeating every ' + formatHMS(state.duration / 1000) + ' \u2014 ' + state.lastResult);
+  }
+  state.firstRunDone = true;
   if(state.mode === 'every'){ state.nextAt = Date.now() + state.duration; }
   else { state.done = true; }
   scheduleLineTimerSave();
 }
 function tickLineTimers(){
   var now = Date.now(), changed = false;
-  Object.keys(npLineTimers).forEach(function(key){ var state = npLineTimers[key]; if(state.type === 'cd' && state.endAt && state.endAt <= now){ state.endAt = 0; state.remaining = 0; showAlarm('Countdown finished', 'Your line countdown has reached zero.'); changed = true; } if(state.type === 'rem' && !state.canceled && !state.fired && state.when <= now){ state.fired = true; showAlarm('Reminder', state.note || 'Reminder due'); changed = true; } if(state.type === 'calc' && !state.canceled && !state.done && !state.paused && state.nextAt <= now){ runScheduledCalculation(state, key); changed = true; } });
+  Object.keys(npLineTimers).forEach(function(key){ var state = npLineTimers[key]; if(state.type === 'cd' && state.endAt && state.endAt <= now){ state.endAt = 0; state.remaining = 0; if(state.expr){ state.lastResult = runTimerExprStatements(state.expr); } showAlarm('Countdown finished', state.expr ? (state.expr + ' \u2192 ' + state.lastResult) : 'Your line countdown has reached zero.'); changed = true; } if(state.type === 'rem' && !state.canceled && !state.fired && state.when <= now){ state.fired = true; showAlarm('Reminder', state.note || 'Reminder due'); changed = true; } if(state.type === 'calc' && !state.canceled && !state.done && !state.paused && state.nextAt <= now){ runScheduledCalculation(state, key); changed = true; } });
   if(changed){ scheduleLineTimerSave(); }
   if(changed || Object.keys(npLineTimers).some(function(key){ var s=npLineTimers[key]; return s.started || s.endAt || (s.type === 'calc' && !s.canceled && !s.done && !s.paused); })){ renderNotepad(); }
 }
