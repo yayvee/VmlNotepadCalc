@@ -139,6 +139,11 @@
     line-height:24px; color:var(--text-secondary);
   }
   #npOverlay .np-line-timer-note{ max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text-secondary); }
+  #npOverlay .np-line-timer-label{
+    font-weight:700; color:#fff; background:var(--accent, #3C3489);
+    padding:1px 8px; border-radius:10px; font-size:11px; white-space:nowrap;
+    max-width:140px; overflow:hidden; text-overflow:ellipsis;
+  }
   #npOverlay .np-line-timer button{
     height:24px; padding:0 8px; border:1px solid var(--border); border-radius:6px; background:var(--surface-1);
     color:var(--text-primary); font:700 11px var(--font); cursor:pointer; pointer-events:auto !important; position:relative; z-index:4;
@@ -2069,7 +2074,15 @@ function formatHMSMillis(totalMs){
   return formatHMS(totalMs / 1000) + '.' + ('00' + (totalMs % 1000)).slice(-3);
 }
 function parseLineTimer(rawLine, index){
-  var line = rawLine.trim(), match, type, duration = 0, when = 0, note = '';
+  var rawTrimmed = rawLine.trim();
+  var label = '';
+  var line = rawTrimmed;
+  var nameMatch = line.match(/"([^"]*)"/);
+  if(nameMatch){
+    label = nameMatch[1].trim();
+    line = (line.slice(0, nameMatch.index) + line.slice(nameMatch.index + nameMatch[0].length)).replace(/\s{2,}/g, ' ').trim();
+  }
+  var match, type, duration = 0, when = 0, note = '';
   if(/^(?:sw|stopwatch)\b/i.test(line)){ type = 'sw'; }
   else if((match = line.match(/^(?:cd|countdown|timer)\s+(.+)$/i))){
     type = 'cd';
@@ -2080,7 +2093,7 @@ function parseLineTimer(rawLine, index){
     if(pipeIdx !== -1){ cdExpr = cdRest.slice(pipeIdx + 1).trim(); }
     duration = parseLineDuration(cdDurationText.trim());
     if(!duration){ return null; }
-    return { type:type, key:type + ':' + index + ':' + line, duration:duration, when:when, note:note, expr:cdExpr };
+    return { type:type, key:type + ':' + index + ':' + rawTrimmed, duration:duration, when:when, note:note, expr:cdExpr, label:label };
   }
   else if((match = line.match(/^(?:remind|reminder)\s+(.+?)(?:\s*\|\s*(.*))?$/i))){
     type = 'rem'; note = (match[2] || '').trim(); var whenText = match[1].trim();
@@ -2093,17 +2106,17 @@ function parseLineTimer(rawLine, index){
     var initialDelay = parseScheduleDuration(match[1].trim());
     var everyDuration = parseScheduleDuration(match[2].trim());
     if(!initialDelay || !everyDuration){ return null; }
-    return { type:type, key:type + ':' + index + ':' + line, duration:everyDuration, initialDelay:initialDelay, mode:'every', expr:match[3].trim() };
+    return { type:type, key:type + ':' + index + ':' + rawTrimmed, duration:everyDuration, initialDelay:initialDelay, mode:'every', expr:match[3].trim(), label:label };
   } else if((match = line.match(/^(every|after)\s+(.+?)\s*\|\s*(.+)$/i))){
     type = 'calc'; duration = parseScheduleDuration(match[2]);
     if(!duration){ return null; }
-    return { type:type, key:type + ':' + index + ':' + line, duration:duration, mode:match[1].toLowerCase(), expr:match[3].trim() };
+    return { type:type, key:type + ':' + index + ':' + rawTrimmed, duration:duration, mode:match[1].toLowerCase(), expr:match[3].trim(), label:label };
   } else if((match = line.match(/^(?:at|on)\s+(.+?)\s*\|\s*(.+)$/i))){
     type = 'calc'; when = new Date(match[1].trim()).getTime();
     if(!when || isNaN(when)){ return null; }
-    return { type:type, key:type + ':' + index + ':' + line, when:when, mode:'at', expr:match[2].trim() };
+    return { type:type, key:type + ':' + index + ':' + rawTrimmed, when:when, mode:'at', expr:match[2].trim(), label:label };
   } else { return null; }
-  return { type:type, key:type + ':' + index + ':' + line, duration:duration, when:when, note:note };
+  return { type:type, key:type + ':' + index + ':' + rawTrimmed, duration:duration, when:when, note:note, label:label };
 }
 function getLineTimer(spec){
   var state = npLineTimers[spec.key];
@@ -2111,7 +2124,7 @@ function getLineTimer(spec){
     var firstNextAt = spec.type === 'calc'
       ? (spec.when || (Date.now() + (spec.initialDelay !== undefined ? spec.initialDelay : spec.duration)))
       : 0;
-    state = npLineTimers[spec.key] = { type:spec.type, duration:spec.duration, initialDelay:spec.initialDelay, when:spec.when, note:spec.note, mode:spec.mode, expr:spec.expr, elapsed:0, started:0, endAt:0, canceled:false, fired:false, nextAt:firstNextAt, lastResult:'', done:false, paused:false, pausedRemaining:0, firstRunDone:false };
+    state = npLineTimers[spec.key] = { type:spec.type, duration:spec.duration, initialDelay:spec.initialDelay, when:spec.when, note:spec.note, mode:spec.mode, expr:spec.expr, label:spec.label || '', elapsed:0, started:0, endAt:0, canceled:false, fired:false, nextAt:firstNextAt, lastResult:'', done:false, paused:false, pausedRemaining:0, firstRunDone:false };
   }
   return state;
 }
@@ -2120,14 +2133,15 @@ function lineTimerMarkup(rawLine, index){
   if(!spec){ return ''; }
   if(npLineTimerSeenKeys){ npLineTimerSeenKeys[spec.key] = true; }
   var state = getLineTimer(spec), key = escapeHtml(spec.key);
+  var labelHtml = spec.label ? ('<span class="np-line-timer-label">' + escapeHtml(spec.label) + '</span>') : '';
   if(spec.type === 'sw'){
     var elapsed = state.elapsed + (state.started ? Date.now() - state.started : 0);
-    return '<span class="np-line-timer"><span class="np-line-timer-display">' + formatHMSMillis(elapsed) + '</span><button class="' + (state.started ? 'running' : '') + '" data-line-timer-action="sw-toggle" data-line-timer-key="' + key + '">' + (state.started ? 'Pause' : 'Start') + '</button><button data-line-timer-action="sw-reset" data-line-timer-key="' + key + '">Reset</button></span>';
+    return '<span class="np-line-timer">' + labelHtml + '<span class="np-line-timer-display">' + formatHMSMillis(elapsed) + '</span><button class="' + (state.started ? 'running' : '') + '" data-line-timer-action="sw-toggle" data-line-timer-key="' + key + '">' + (state.started ? 'Pause' : 'Start') + '</button><button data-line-timer-action="sw-reset" data-line-timer-key="' + key + '">Reset</button></span>';
   }
   if(spec.type === 'cd'){
     var remaining = state.endAt ? Math.max(0, state.endAt - Date.now()) : (state.remaining || state.duration);
     var cdNote = (spec.expr && state.lastResult) ? ('<span class="np-line-timer-note" title="' + escapeHtml(spec.expr) + '">' + escapeHtml(state.lastResult) + '</span>') : '';
-    return '<span class="np-line-timer"><span class="np-line-timer-display">' + formatHMS(remaining / 1000) + '</span>' + cdNote + '<button class="' + (state.endAt ? 'running' : '') + '" data-line-timer-action="cd-toggle" data-line-timer-key="' + key + '">' + (state.endAt ? 'Pause' : (state.remaining ? 'Resume' : 'Start')) + '</button><button data-line-timer-action="cd-reset" data-line-timer-key="' + key + '">Reset</button></span>';
+    return '<span class="np-line-timer">' + labelHtml + '<span class="np-line-timer-display">' + formatHMS(remaining / 1000) + '</span>' + cdNote + '<button class="' + (state.endAt ? 'running' : '') + '" data-line-timer-action="cd-toggle" data-line-timer-key="' + key + '">' + (state.endAt ? 'Pause' : (state.remaining ? 'Resume' : 'Start')) + '</button><button data-line-timer-action="cd-reset" data-line-timer-key="' + key + '">Reset</button></span>';
   }
   if(spec.type === 'calc'){
     var calcLabel;
@@ -2139,10 +2153,10 @@ function lineTimerMarkup(rawLine, index){
       calcLabel = 'Next ' + formatReminderTime(state.nextAt) + ' (in ' + (msLeft > 0 ? formatHMS(msLeft / 1000) : '00:00:00') + ')';
     }
     if(state.lastResult){ calcLabel += ' • ' + state.lastResult; }
-    return '<span class="np-line-timer"><span class="np-line-timer-note" title="' + escapeHtml(spec.expr) + '">' + escapeHtml(calcLabel) + '</span><button data-line-timer-action="calc-run" data-line-timer-key="' + key + '">Run</button>' + (!state.canceled && !state.done ? '<button class="' + (state.paused ? 'running' : '') + '" data-line-timer-action="calc-pause" data-line-timer-key="' + key + '">' + (state.paused ? 'Resume' : 'Pause') + '</button><button data-line-timer-action="calc-cancel" data-line-timer-key="' + key + '">Cancel</button>' : '') + '<button data-line-timer-action="calc-reset" data-line-timer-key="' + key + '">Reset</button></span>';
+    return '<span class="np-line-timer">' + labelHtml + '<span class="np-line-timer-note" title="' + escapeHtml(spec.expr) + '">' + escapeHtml(calcLabel) + '</span><button data-line-timer-action="calc-run" data-line-timer-key="' + key + '">Run</button>' + (!state.canceled && !state.done ? '<button class="' + (state.paused ? 'running' : '') + '" data-line-timer-action="calc-pause" data-line-timer-key="' + key + '">' + (state.paused ? 'Resume' : 'Pause') + '</button><button data-line-timer-action="calc-cancel" data-line-timer-key="' + key + '">Cancel</button>' : '') + '<button data-line-timer-action="calc-reset" data-line-timer-key="' + key + '">Reset</button></span>';
   }
-  var label = state.canceled ? 'Cancelled' : (state.fired ? 'Done' : 'Due ' + formatReminderTime(state.when));
-  return '<span class="np-line-timer"><span class="np-line-timer-note">' + escapeHtml(label + (state.note ? ': ' + state.note : '')) + '</span>' + (!state.canceled && !state.fired ? '<button data-line-timer-action="rem-cancel" data-line-timer-key="' + key + '">Cancel</button>' : '') + '</span>';
+  var remLabel = state.canceled ? 'Cancelled' : (state.fired ? 'Done' : 'Due ' + formatReminderTime(state.when));
+  return '<span class="np-line-timer">' + labelHtml + '<span class="np-line-timer-note">' + escapeHtml(remLabel + (state.note ? ': ' + state.note : '')) + '</span>' + (!state.canceled && !state.fired ? '<button data-line-timer-action="rem-cancel" data-line-timer-key="' + key + '">Cancel</button>' : '') + '</span>';
 }
 function handleLineTimerAction(action, key){
   var state = npLineTimers[key]; if(!state){ return; }
