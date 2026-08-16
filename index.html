@@ -39,13 +39,13 @@
   }
   h1{ font-size: 18px; font-weight: 700; margin: 0; }
   .top-row{ flex: 1; min-width: 0; }
-  #npClear, #npExport, #npImportBtn, #npCsvBtn, #npThesaurus, #npSpelling, #npAutoCorrect, #npFontDown, #npFontUp{
+  #npClear, #npExport, #npImportBtn, #npCsvBtn, #npThesaurus, #npSpelling, #npAutoCorrect, #npFontDown, #npFontUp, #npFind{
     height: 34px; padding: 0 14px; font-size: 13px; font-weight: 700; font-family: var(--font);
     border-radius: 8px; border: 1px solid var(--border); background: var(--card); color: var(--text-primary);
     cursor: pointer; flex-shrink: 0; margin-left: 8px;
   }
   #npFontDown, #npFontUp{ padding: 0 10px; }
-  #npClear:active, #npExport:active, #npImportBtn:active, #npCsvBtn:active, #npThesaurus:active, #npSpelling:active, #npAutoCorrect:active, #npFontDown:active, #npFontUp:active{ transform: scale(0.97); }
+  #npClear:active, #npExport:active, #npImportBtn:active, #npCsvBtn:active, #npThesaurus:active, #npSpelling:active, #npAutoCorrect:active, #npFontDown:active, #npFontUp:active, #npFind:active{ transform: scale(0.97); }
   #npAutoCorrect.on{ background: var(--accent, #3C3489); border-color: var(--accent, #3C3489); color: #fff; }
   .np-ts-bright-group{
     display: flex; align-items: center; gap: 0; margin-left: 8px; flex-shrink: 0;
@@ -89,6 +89,27 @@
     cursor: pointer; flex-shrink: 0; margin-left: 8px;
   }
   #npCsvResetLinks:active{ transform: scale(0.97); }
+
+  #npFindBar, #npReplaceRow{ margin-top: 8px; gap: 8px; }
+  #npFindInput, #npReplaceInput{
+    height: 30px; padding: 0 10px; font-size: 13px; font-family: var(--font);
+    border-radius: 8px; border: 1px solid var(--border); background: var(--card); color: var(--text-primary);
+    width: 200px; flex-shrink: 0;
+  }
+  #npFindPrev, #npFindNext, #npFindCase, #npFindReplaceToggle, #npFindClose, #npReplaceOne, #npReplaceAll{
+    height: 30px; padding: 0 10px; font-size: 12px; font-weight: 700; font-family: var(--font);
+    border-radius: 8px; border: 1px solid var(--border); background: var(--card); color: var(--text-primary);
+    cursor: pointer; flex-shrink: 0;
+  }
+  #npFindPrev, #npFindNext{ width: 30px; padding: 0; }
+  #npFindPrev:active, #npFindNext:active, #npFindCase:active, #npFindReplaceToggle:active, #npFindClose:active, #npReplaceOne:active, #npReplaceAll:active{ transform: scale(0.97); }
+  #npFindCase[aria-pressed="true"], #npFindReplaceToggle.on{ background: var(--accent, #3C3489); border-color: var(--accent, #3C3489); color: #fff; }
+  #npFindClose{ width: 30px; padding: 0; font-size: 16px; line-height: 1; }
+  #npFindCount{ font-size: 12px; font-weight: 700; color: var(--text-secondary); white-space: nowrap; min-width: 70px; }
+  #npOverlay .np-find-hit{
+    background: rgba(255, 200, 0, 0.35); border-radius: 2px;
+  }
+  #npOverlay .np-find-hit.np-find-current{ background: rgba(255, 140, 0, 0.6); }
 
   main{ flex: 1; display: flex; min-height: 0; }
 
@@ -304,8 +325,23 @@
     <button id="npThesaurus" title="Select a word (or click into one), then click here for synonyms">Thesaurus</button>
     <button id="npSpelling" title="Select a word or phrase, then click here for spelling suggestions">Spelling</button>
     <button id="npAutoCorrect" title="Toggle silent auto-correction of misspelled words as you type">Auto-correct: On</button>
+    <button id="npFind" title="Find text (Ctrl/Cmd+F). Add Replace with the toggle inside.">Find</button>
     <button id="npTimerBtn" style="display:none" aria-hidden="true" tabindex="-1">Timer</button>
     <button id="npClear">Clear</button>
+  </div>
+  <div class="status-row" id="npFindBar" style="display:none;">
+    <input type="text" id="npFindInput" placeholder="Find" aria-label="Find text" />
+    <button id="npFindPrev" aria-label="Previous match">&#8593;</button>
+    <button id="npFindNext" aria-label="Next match">&#8595;</button>
+    <span id="npFindCount"></span>
+    <button id="npFindCase" title="Toggle case-sensitive match" aria-pressed="false">Aa</button>
+    <button id="npFindReplaceToggle" title="Show/hide replace">Replace</button>
+    <button id="npFindClose" aria-label="Close find bar">&times;</button>
+  </div>
+  <div class="status-row" id="npReplaceRow" style="display:none;">
+    <input type="text" id="npReplaceInput" placeholder="Replace with" aria-label="Replace with" />
+    <button id="npReplaceOne">Replace</button>
+    <button id="npReplaceAll">Replace All</button>
   </div>
   <div class="status-row" id="npCsvNav" style="display:none;">
     <button id="npCsvPrev" aria-label="Previous record">&#8592;</button>
@@ -1069,6 +1105,27 @@ function escapeHtml(s){
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
+function escapeRegExp(s){
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+function buildGhostHtml(rawLine, lineGlobalStart){
+  var text = rawLine.length ? rawLine : ' ';
+  if(!npFindState.query){ return escapeHtml(text); }
+  var flags = npFindState.caseSensitive ? 'g' : 'gi';
+  var re;
+  try{ re = new RegExp(escapeRegExp(npFindState.query), flags); }catch(e){ return escapeHtml(text); }
+  var html = '', lastIndex = 0, m;
+  while((m = re.exec(text)) !== null){
+    var matchGlobalStart = lineGlobalStart + m.index;
+    var isCurrent = npFindState.matches[npFindState.currentIndex] && npFindState.matches[npFindState.currentIndex].start === matchGlobalStart;
+    html += escapeHtml(text.slice(lastIndex, m.index));
+    html += '<span class="np-find-hit' + (isCurrent ? ' np-find-current' : '') + '">' + escapeHtml(m[0]) + '</span>';
+    lastIndex = m.index + m[0].length;
+    if(m[0].length === 0){ re.lastIndex++; }
+  }
+  html += escapeHtml(text.slice(lastIndex));
+  return html;
+}
 function renderNotepad(){
   var lines = npInput.value.split('\n');
   var evalOut = evaluateNotepad(npInput.value);
@@ -1077,9 +1134,11 @@ function renderNotepad(){
   var tsChanged = false;
   var nextTimestamps = [];
   npLineTimerSeenKeys = {};
+  var runningOffset = 0;
   var html = lines.map(function(rawLine, i){
     var res = results[i] || '';
-    var ghostText = rawLine.length ? rawLine : ' ';
+    var ghostHtml = buildGhostHtml(rawLine, runningOffset);
+    runningOffset += rawLine.length + 1;
     var displayText = '';
     var valueOnly = '';
     if(res){
@@ -1133,7 +1192,7 @@ function renderNotepad(){
       }
     }
 
-    return '<div class="ov-line"><span class="ov-ghost">' + escapeHtml(ghostText) + '</span><span class="' + resultClass + '"' + dataAttr + '>' + escapeHtml(displayText) + '</span>' + lineTimerMarkup(rawLine, i) + webLinksHtml + linkChip + tsSpan + '</div>';
+    return '<div class="ov-line"><span class="ov-ghost">' + ghostHtml + '</span><span class="' + resultClass + '"' + dataAttr + '>' + escapeHtml(displayText) + '</span>' + lineTimerMarkup(rawLine, i) + webLinksHtml + linkChip + tsSpan + '</div>';
   }).join('');
   npOverlay.innerHTML = html;
   npLineTimestamps = nextTimestamps;
@@ -1166,6 +1225,167 @@ document.getElementById('npClear').addEventListener('click', function(){
   renderNotepad();
   npSaveNow();
   npInput.focus();
+});
+
+/* ---------------- Find & Replace ---------------- */
+var npFindState = { query: '', caseSensitive: false, matches: [], currentIndex: -1 };
+var npFindBarEl = document.getElementById('npFindBar');
+var npReplaceRowEl = document.getElementById('npReplaceRow');
+var npFindInputEl = document.getElementById('npFindInput');
+var npReplaceInputEl = document.getElementById('npReplaceInput');
+var npFindCountEl = document.getElementById('npFindCount');
+
+function computeFindMatches(){
+  npFindState.matches = [];
+  var q = npFindState.query;
+  if(!q){ return; }
+  var flags = npFindState.caseSensitive ? 'g' : 'gi';
+  var re;
+  try{ re = new RegExp(escapeRegExp(q), flags); }catch(e){ return; }
+  var text = npInput.value;
+  var m;
+  while((m = re.exec(text)) !== null){
+    npFindState.matches.push({ start: m.index, end: m.index + m[0].length });
+    if(m[0].length === 0){ re.lastIndex++; }
+  }
+}
+
+function updateFindCount(){
+  if(!npFindState.query){ npFindCountEl.textContent = ''; return; }
+  if(!npFindState.matches.length){ npFindCountEl.textContent = 'No results'; return; }
+  npFindCountEl.textContent = (npFindState.currentIndex + 1) + ' / ' + npFindState.matches.length;
+}
+
+function scrollToSelection(start){
+  // Approximate the line containing `start` and scroll it into view, mirroring
+  // the line-height math used elsewhere for gutter/overlay sync.
+  var upTo = npInput.value.slice(0, start);
+  var lineNum = upTo.split('\n').length - 1;
+  var lineHeight = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--np-line-height')) || 30;
+  var target = lineNum * lineHeight;
+  if(target < npInput.scrollTop || target > npInput.scrollTop + npInput.clientHeight - lineHeight){
+    npInput.scrollTop = Math.max(0, target - npInput.clientHeight / 2);
+  }
+}
+
+function goToMatch(index){
+  if(!npFindState.matches.length){ npFindState.currentIndex = -1; updateFindCount(); renderNotepad(); return; }
+  npFindState.currentIndex = ((index % npFindState.matches.length) + npFindState.matches.length) % npFindState.matches.length;
+  var match = npFindState.matches[npFindState.currentIndex];
+  npInput.focus();
+  npInput.setSelectionRange(match.start, match.end);
+  scrollToSelection(match.start);
+  updateFindCount();
+  renderNotepad();
+}
+
+function refreshFind(keepIndexNear){
+  npFindState.query = npFindInputEl.value;
+  computeFindMatches();
+  if(!npFindState.matches.length){
+    npFindState.currentIndex = -1;
+  } else if(typeof keepIndexNear === 'number'){
+    // Find the first match at/after the given text position, wrapping to the first match.
+    var idx = npFindState.matches.findIndex(function(m){ return m.start >= keepIndexNear; });
+    npFindState.currentIndex = idx === -1 ? 0 : idx;
+  } else if(npFindState.currentIndex === -1){
+    npFindState.currentIndex = 0;
+  } else if(npFindState.currentIndex >= npFindState.matches.length){
+    npFindState.currentIndex = npFindState.matches.length - 1;
+  }
+  updateFindCount();
+  if(npFindState.matches.length){
+    var match = npFindState.matches[npFindState.currentIndex];
+    npInput.setSelectionRange(match.start, match.end);
+    scrollToSelection(match.start);
+  }
+  renderNotepad();
+}
+
+function openFindBar(withReplace){
+  npFindBarEl.style.display = 'flex';
+  if(withReplace){ npReplaceRowEl.style.display = 'flex'; document.getElementById('npFindReplaceToggle').classList.add('on'); }
+  var selStart = npInput.selectionStart, selEnd = npInput.selectionEnd;
+  if(selEnd > selStart){
+    var selected = npInput.value.slice(selStart, selEnd);
+    if(selected.indexOf('\n') === -1){ npFindInputEl.value = selected; }
+  }
+  npFindInputEl.focus();
+  npFindInputEl.select();
+  refreshFind(0);
+}
+function closeFindBar(){
+  npFindBarEl.style.display = 'none';
+  npReplaceRowEl.style.display = 'none';
+  document.getElementById('npFindReplaceToggle').classList.remove('on');
+  npFindState.query = '';
+  npFindState.matches = [];
+  npFindState.currentIndex = -1;
+  renderNotepad();
+  npInput.focus();
+}
+
+document.getElementById('npFind').addEventListener('click', function(){
+  if(npFindBarEl.style.display === 'none' || !npFindBarEl.style.display){ openFindBar(false); }
+  else { closeFindBar(); }
+});
+document.getElementById('npFindClose').addEventListener('click', closeFindBar);
+document.getElementById('npFindReplaceToggle').addEventListener('click', function(){
+  var showing = npReplaceRowEl.style.display !== 'none' && npReplaceRowEl.style.display !== '';
+  npReplaceRowEl.style.display = showing ? 'none' : 'flex';
+  this.classList.toggle('on', !showing);
+  if(!showing){ npReplaceInputEl.focus(); }
+});
+npFindInputEl.addEventListener('input', function(){ refreshFind(0); });
+npFindInputEl.addEventListener('keydown', function(e){
+  if(e.key === 'Enter'){ e.preventDefault(); if(e.shiftKey){ goToMatch(npFindState.currentIndex - 1); } else { goToMatch(npFindState.currentIndex + 1); } }
+  else if(e.key === 'Escape'){ e.preventDefault(); closeFindBar(); }
+});
+npReplaceInputEl.addEventListener('keydown', function(e){
+  if(e.key === 'Escape'){ e.preventDefault(); closeFindBar(); }
+});
+document.getElementById('npFindPrev').addEventListener('click', function(){ goToMatch(npFindState.currentIndex - 1); });
+document.getElementById('npFindNext').addEventListener('click', function(){ goToMatch(npFindState.currentIndex + 1); });
+document.getElementById('npFindCase').addEventListener('click', function(){
+  npFindState.caseSensitive = !npFindState.caseSensitive;
+  this.setAttribute('aria-pressed', npFindState.caseSensitive ? 'true' : 'false');
+  refreshFind(0);
+});
+
+document.getElementById('npReplaceOne').addEventListener('click', function(){
+  if(npFindState.currentIndex === -1 || !npFindState.matches.length){ return; }
+  var match = npFindState.matches[npFindState.currentIndex];
+  var replacement = npReplaceInputEl.value;
+  npInput.value = npInput.value.slice(0, match.start) + replacement + npInput.value.slice(match.end);
+  var nextPos = match.start + replacement.length;
+  npScheduleSave();
+  refreshFind(nextPos);
+});
+document.getElementById('npReplaceAll').addEventListener('click', function(){
+  if(!npFindState.query){ return; }
+  var flags = npFindState.caseSensitive ? 'g' : 'gi';
+  var re;
+  try{ re = new RegExp(escapeRegExp(npFindState.query), flags); }catch(e){ return; }
+  var replacement = npReplaceInputEl.value;
+  var count = (npInput.value.match(re) || []).length;
+  npInput.value = npInput.value.replace(re, replacement);
+  npScheduleSave();
+  refreshFind();
+  flashStatus(count + ' replaced', 1400);
+});
+
+document.addEventListener('keydown', function(e){
+  var mod = e.ctrlKey || e.metaKey;
+  if(mod && (e.key === 'f' || e.key === 'F')){
+    e.preventDefault();
+    if(npFindBarEl.style.display === 'none' || !npFindBarEl.style.display){ openFindBar(false); }
+    else { npFindInputEl.focus(); npFindInputEl.select(); }
+  } else if(mod && (e.key === 'h' || e.key === 'H')){
+    e.preventDefault();
+    openFindBar(true);
+  } else if(e.key === 'Escape' && npFindBarEl.style.display !== 'none' && npFindBarEl.style.display){
+    closeFindBar();
+  }
 });
 
 var NP_FONT_KEY = 'notepad-calculator-fullpage-fontsize-v1';
@@ -2075,8 +2295,35 @@ function formatHMSMillis(totalMs){
 }
 function parseLineTimer(rawLine, index){
   var rawTrimmed = rawLine.trim();
+  // Normalize "smart"/curly quotes to plain straight quotes before parsing.
+  // macOS/iOS (Keyboard > "Use smart quotes") and pasting from Word/Pages/Notes
+  // silently convert typed " into curly " " -- which would otherwise never
+  // match the name/then-start parsing below, with no visible error.
+  var line = rawTrimmed.replace(/[\u201C\u201D\u2033]/g, '"');
+
+  // "then start "Name"" is a trailing completion trigger: when THIS timer
+  // finishes, it starts a DIFFERENT, separately-declared timer whose own
+  // quoted label matches "Name". Extracted first so it's never mistaken for
+  // this timer's own label.
+  var thenStart = '';
+  var thenMatch = line.match(/\s+then\s+start\s+"([^"]*)"\s*$/i);
+  if(thenMatch){
+    thenStart = thenMatch[1].trim();
+    line = line.slice(0, thenMatch.index).trim();
+  }
+
+  // "manual" marks a calc-type timer (every/at/after) as dormant -- it won't
+  // auto-run on its own schedule until something (typically another timer's
+  // "then start") activates it. Has no effect on stopwatch/countdown/reminder,
+  // which are already dormant until started/due by design.
+  var manual = false;
+  var manualMatch = line.match(/(^|\s)manual(\s|$)/i);
+  if(manualMatch){
+    line = (line.slice(0, manualMatch.index) + ' ' + line.slice(manualMatch.index + manualMatch[0].length)).replace(/\s{2,}/g, ' ').trim();
+    manual = true;
+  }
+
   var label = '';
-  var line = rawTrimmed;
   var nameMatch = line.match(/"([^"]*)"/);
   if(nameMatch){
     label = nameMatch[1].trim();
@@ -2093,7 +2340,7 @@ function parseLineTimer(rawLine, index){
     if(pipeIdx !== -1){ cdExpr = cdRest.slice(pipeIdx + 1).trim(); }
     duration = parseLineDuration(cdDurationText.trim());
     if(!duration){ return null; }
-    return { type:type, key:type + ':' + index + ':' + rawTrimmed, duration:duration, when:when, note:note, expr:cdExpr, label:label };
+    return { type:type, key:type + ':' + rawTrimmed, duration:duration, when:when, note:note, expr:cdExpr, label:label, thenStart:thenStart, manual:manual };
   }
   else if((match = line.match(/^(?:remind|reminder)\s+(.+?)(?:\s*\|\s*(.*))?$/i))){
     type = 'rem'; note = (match[2] || '').trim(); var whenText = match[1].trim();
@@ -2106,25 +2353,48 @@ function parseLineTimer(rawLine, index){
     var initialDelay = parseScheduleDuration(match[1].trim());
     var everyDuration = parseScheduleDuration(match[2].trim());
     if(!initialDelay || !everyDuration){ return null; }
-    return { type:type, key:type + ':' + index + ':' + rawTrimmed, duration:everyDuration, initialDelay:initialDelay, mode:'every', expr:match[3].trim(), label:label };
+    return { type:type, key:type + ':' + rawTrimmed, duration:everyDuration, initialDelay:initialDelay, mode:'every', expr:match[3].trim(), label:label, thenStart:thenStart, manual:manual };
   } else if((match = line.match(/^(every|after)\s+(.+?)\s*\|\s*(.+)$/i))){
     type = 'calc'; duration = parseScheduleDuration(match[2]);
     if(!duration){ return null; }
-    return { type:type, key:type + ':' + index + ':' + rawTrimmed, duration:duration, mode:match[1].toLowerCase(), expr:match[3].trim(), label:label };
+    return { type:type, key:type + ':' + rawTrimmed, duration:duration, mode:match[1].toLowerCase(), expr:match[3].trim(), label:label, thenStart:thenStart, manual:manual };
   } else if((match = line.match(/^(?:at|on)\s+(.+?)\s*\|\s*(.+)$/i))){
     type = 'calc'; when = new Date(match[1].trim()).getTime();
     if(!when || isNaN(when)){ return null; }
-    return { type:type, key:type + ':' + index + ':' + rawTrimmed, when:when, mode:'at', expr:match[2].trim(), label:label };
+    return { type:type, key:type + ':' + rawTrimmed, when:when, mode:'at', expr:match[2].trim(), label:label, thenStart:thenStart, manual:manual };
   } else { return null; }
-  return { type:type, key:type + ':' + index + ':' + rawTrimmed, duration:duration, when:when, note:note, label:label };
+  return { type:type, key:type + ':' + rawTrimmed, duration:duration, when:when, note:note, label:label, thenStart:thenStart, manual:manual };
+}
+function triggerThenStart(name){
+  if(!name){ return; }
+  var found = false;
+  Object.keys(npLineTimers).forEach(function(k){
+    var t = npLineTimers[k];
+    if(!t || t.label !== name){ return; }
+    found = true;
+    if(t.type === 'cd'){
+      if(!t.endAt){ t.endAt = Date.now() + (t.remaining || t.duration); t.remaining = 0; t.lastResult = ''; }
+    } else if(t.type === 'sw'){
+      if(!t.started){ t.started = Date.now(); }
+    } else if(t.type === 'calc'){
+      t.canceled = false; t.done = false; t.paused = false; t.pausedRemaining = 0; t.firstRunDone = false;
+      t.nextAt = Date.now() + (t.initialDelay !== undefined ? t.initialDelay : t.duration);
+    } else if(t.type === 'rem'){
+      t.canceled = false; t.fired = false; t.when = Date.now() + 1000;
+    }
+  });
+  scheduleLineTimerSave();
+  return found;
 }
 function getLineTimer(spec){
+
   var state = npLineTimers[spec.key];
   if(!state){
-    var firstNextAt = spec.type === 'calc'
+    var isDormant = spec.type === 'calc' && spec.manual;
+    var firstNextAt = (spec.type === 'calc' && !isDormant)
       ? (spec.when || (Date.now() + (spec.initialDelay !== undefined ? spec.initialDelay : spec.duration)))
       : 0;
-    state = npLineTimers[spec.key] = { type:spec.type, duration:spec.duration, initialDelay:spec.initialDelay, when:spec.when, note:spec.note, mode:spec.mode, expr:spec.expr, label:spec.label || '', elapsed:0, started:0, endAt:0, canceled:false, fired:false, nextAt:firstNextAt, lastResult:'', done:false, paused:false, pausedRemaining:0, firstRunDone:false };
+    state = npLineTimers[spec.key] = { type:spec.type, duration:spec.duration, initialDelay:spec.initialDelay, when:spec.when, note:spec.note, mode:spec.mode, expr:spec.expr, label:spec.label || '', thenStart:spec.thenStart || '', manual:!!spec.manual, elapsed:0, started:0, endAt:0, canceled:isDormant, fired:false, nextAt:firstNextAt, lastResult:'', done:false, paused:false, pausedRemaining:0, firstRunDone:false };
   }
   return state;
 }
@@ -2134,6 +2404,7 @@ function lineTimerMarkup(rawLine, index){
   if(npLineTimerSeenKeys){ npLineTimerSeenKeys[spec.key] = true; }
   var state = getLineTimer(spec), key = escapeHtml(spec.key);
   var labelHtml = spec.label ? ('<span class="np-line-timer-label">' + escapeHtml(spec.label) + '</span>') : '';
+  if(spec.thenStart){ labelHtml += '<span class="np-line-timer-note">\u2192 ' + escapeHtml(spec.thenStart) + '</span>'; }
   if(spec.type === 'sw'){
     var elapsed = state.elapsed + (state.started ? Date.now() - state.started : 0);
     return '<span class="np-line-timer">' + labelHtml + '<span class="np-line-timer-display">' + formatHMSMillis(elapsed) + '</span><button class="' + (state.started ? 'running' : '') + '" data-line-timer-action="sw-toggle" data-line-timer-key="' + key + '">' + (state.started ? 'Pause' : 'Start') + '</button><button data-line-timer-action="sw-reset" data-line-timer-key="' + key + '">Reset</button></span>';
@@ -2145,7 +2416,7 @@ function lineTimerMarkup(rawLine, index){
   }
   if(spec.type === 'calc'){
     var calcLabel;
-    if(state.canceled){ calcLabel = 'Cancelled'; }
+    if(state.canceled){ calcLabel = (state.manual && !state.firstRunDone && state.lastResult === '') ? ('Waiting' + (state.thenStart ? '' : ' (manual)')) : 'Cancelled'; }
     else if(state.done){ calcLabel = 'Done'; }
     else if(state.paused){ calcLabel = 'Paused (' + formatHMS(Math.max(0, state.pausedRemaining) / 1000) + ' left)'; }
     else {
@@ -2219,9 +2490,6 @@ function runTimerExprStatements(exprText){
   return summaryParts.join(', ');
 }
 function runScheduledCalculation(state, key){
-  var parts = key.split(':'); var lineIndex = parseInt(parts[1], 10);
-  var lines = npInput.value.split('\n');
-  if(isNaN(lineIndex) || !lines[lineIndex]){ return; }
   state.lastResult = runTimerExprStatements(state.expr);
   // For an "after <delay> every <interval>" timer, the FIRST run is the moment
   // the initial wait ends and the recurring cycle begins -- show the same
@@ -2233,12 +2501,28 @@ function runScheduledCalculation(state, key){
   }
   state.firstRunDone = true;
   if(state.mode === 'every'){ state.nextAt = Date.now() + state.duration; }
-  else { state.done = true; }
+  else { state.done = true; if(state.thenStart){ triggerThenStart(state.thenStart); } }
   scheduleLineTimerSave();
 }
 function tickLineTimers(){
   var now = Date.now(), changed = false;
-  Object.keys(npLineTimers).forEach(function(key){ var state = npLineTimers[key]; if(state.type === 'cd' && state.endAt && state.endAt <= now){ state.endAt = 0; state.remaining = 0; if(state.expr){ state.lastResult = runTimerExprStatements(state.expr); } showAlarm('Countdown finished', state.expr ? (state.expr + ' \u2192 ' + state.lastResult) : 'Your line countdown has reached zero.'); changed = true; } if(state.type === 'rem' && !state.canceled && !state.fired && state.when <= now){ state.fired = true; showAlarm('Reminder', state.note || 'Reminder due'); changed = true; } if(state.type === 'calc' && !state.canceled && !state.done && !state.paused && state.nextAt <= now){ runScheduledCalculation(state, key); changed = true; } });
+  Object.keys(npLineTimers).forEach(function(key){
+    var state = npLineTimers[key];
+    if(state.type === 'cd' && state.endAt && state.endAt <= now){
+      state.endAt = 0; state.remaining = 0;
+      if(state.expr){ state.lastResult = runTimerExprStatements(state.expr); }
+      showAlarm('Countdown finished', state.expr ? (state.expr + ' \u2192 ' + state.lastResult) : 'Your line countdown has reached zero.');
+      if(state.thenStart){ triggerThenStart(state.thenStart); }
+      changed = true;
+    }
+    if(state.type === 'rem' && !state.canceled && !state.fired && state.when <= now){
+      state.fired = true;
+      showAlarm('Reminder', state.note || 'Reminder due');
+      if(state.thenStart){ triggerThenStart(state.thenStart); }
+      changed = true;
+    }
+    if(state.type === 'calc' && !state.canceled && !state.done && !state.paused && state.nextAt <= now){ runScheduledCalculation(state, key); changed = true; }
+  });
   if(changed){ scheduleLineTimerSave(); }
   if(changed || Object.keys(npLineTimers).some(function(key){ var s=npLineTimers[key]; return s.started || s.endAt || (s.type === 'calc' && !s.canceled && !s.done && !s.paused); })){ renderNotepad(); }
 }
