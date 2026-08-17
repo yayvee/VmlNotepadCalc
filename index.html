@@ -39,14 +39,13 @@
   }
   h1{ font-size: 18px; font-weight: 700; margin: 0; }
   .top-row{ flex: 1; min-width: 0; }
-  #npClear, #npExport, #npImportBtn, #npCsvBtn, #npThesaurus, #npSpelling, #npAutoCorrect, #npFontDown, #npFontUp, #npFind{
+  #npClear, #npExport, #npImportBtn, #npCsvBtn, #npFontDown, #npFontUp, #npFind{
     height: 34px; padding: 0 14px; font-size: 13px; font-weight: 700; font-family: var(--font);
     border-radius: 8px; border: 1px solid var(--border); background: var(--card); color: var(--text-primary);
     cursor: pointer; flex-shrink: 0; margin-left: 8px;
   }
   #npFontDown, #npFontUp{ padding: 0 10px; }
-  #npClear:active, #npExport:active, #npImportBtn:active, #npCsvBtn:active, #npThesaurus:active, #npSpelling:active, #npAutoCorrect:active, #npFontDown:active, #npFontUp:active, #npFind:active{ transform: scale(0.97); }
-  #npAutoCorrect.on{ background: var(--accent, #3C3489); border-color: var(--accent, #3C3489); color: #fff; }
+  #npClear:active, #npExport:active, #npImportBtn:active, #npCsvBtn:active, #npFontDown:active, #npFontUp:active, #npFind:active{ transform: scale(0.97); }
   .np-ts-bright-group{
     display: flex; align-items: center; gap: 0; margin-left: 8px; flex-shrink: 0;
     border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
@@ -67,7 +66,6 @@
     -webkit-appearance: none; margin: 0;
   }
   .np-ts-bright-suffix{ font-size: 11px; color: var(--text-secondary); padding-right: 8px; background: var(--card); }
-  #npAutoCorrect.off{ background: var(--card); color: var(--text-secondary); border-style: dashed; }
   #npSavedStatus{ font-size: 12px; font-weight: 700; color: var(--text-secondary); margin-right: 10px; white-space: nowrap; }
   .status-row{ display:flex; align-items:center; flex-shrink:0; }
   #npCsvNav{ margin-top: 8px; gap: 8px; }
@@ -206,7 +204,7 @@
 
   #npSuggest{
     position: fixed; display: none; z-index: 50;
-    min-width: 120px; max-width: 260px; max-height: 220px; overflow-y: auto;
+    min-width: 100px; max-width: 220px; max-height: 200px; overflow-y: auto;
     background: var(--card); border: 1px solid var(--border); border-radius: 8px;
     box-shadow: 0 6px 18px rgba(0,0,0,0.18);
     font-family: var(--font-mono); font-size: 14px; font-weight: 700;
@@ -217,7 +215,6 @@
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
   #npSuggest .np-sugg-item.active{ background: var(--surface-1); }
-  #npSuggest .np-sugg-item.disabled{ color: var(--text-secondary); cursor: default; opacity: 0.7; }
 
   .np-timer-panel{
     position: fixed; top: 64px; right: 16px; width: 300px; z-index: 60;
@@ -322,9 +319,6 @@
     <input type="file" id="npImportFile" accept=".txt,text/plain" style="display:none;" />
     <button id="npCsvBtn">Import CSV</button>
     <input type="file" id="npCsvFile" accept=".csv,text/csv" style="display:none;" />
-    <button id="npThesaurus" title="Select a word (or click into one), then click here for synonyms">Thesaurus</button>
-    <button id="npSpelling" title="Select a word or phrase, then click here for spelling suggestions">Spelling</button>
-    <button id="npAutoCorrect" title="Toggle silent auto-correction of misspelled words as you type">Auto-correct: On</button>
     <button id="npFind" title="Find text (Ctrl/Cmd+F). Add Replace with the toggle inside.">Find</button>
     <button id="npTimerBtn" style="display:none" aria-hidden="true" tabindex="-1">Timer</button>
     <button id="npClear">Clear</button>
@@ -1583,8 +1577,107 @@ document.getElementById('npCsvResetLinks').addEventListener('click', function(){
 });
 refreshCsvNav();
 
+/* ---------------- Variable name autocomplete ---------------- */
+var npKnownVars = [];
+var npSuggestEl = document.getElementById('npSuggest');
+var npVarMirrorEl = null;
+var npSuggestState = { active: false, matches: [], replaceStart: 0, replaceEnd: 0, highlightIndex: 0 };
+
+function getWordBeforeCaret(value, pos){
+  var start = pos;
+  while(start > 0 && /[A-Za-z0-9_]/.test(value[start - 1])){ start--; }
+  return { start: start, word: value.slice(start, pos) };
+}
+
+function createVarMirror(){
+  var div = document.createElement('div');
+  var style = div.style;
+  var computed = window.getComputedStyle(npInput);
+  style.position = 'absolute'; style.visibility = 'hidden'; style.top = '0'; style.left = '-9999px'; style.whiteSpace = 'pre';
+  ['fontFamily','fontSize','fontWeight','fontStyle','letterSpacing','lineHeight',
+   'paddingTop','paddingRight','paddingBottom','paddingLeft',
+   'borderTopWidth','borderRightWidth','borderBottomWidth','borderLeftWidth','boxSizing'
+  ].forEach(function(prop){ style[prop] = computed[prop]; });
+  document.body.appendChild(div);
+  return div;
+}
+function getVarCaretCoords(position){
+  if(!npVarMirrorEl){ npVarMirrorEl = createVarMirror(); }
+  var value = npInput.value;
+  npVarMirrorEl.textContent = value.substring(0, position);
+  var span = document.createElement('span');
+  span.textContent = value.substring(position) || '.';
+  npVarMirrorEl.appendChild(span);
+  return { top: span.offsetTop, left: span.offsetLeft };
+}
+function positionSuggestDropdownAt(pos){
+  var rect = npInput.getBoundingClientRect();
+  var caret = getVarCaretCoords(pos);
+  var lineHeight = parseInt(window.getComputedStyle(npInput).lineHeight) || 26;
+  var top = rect.top + caret.top + lineHeight - npInput.scrollTop;
+  var left = rect.left + caret.left - npInput.scrollLeft;
+  var maxLeft = window.innerWidth - 230;
+  if(left > maxLeft){ left = maxLeft; } if(left < 8){ left = 8; }
+  var maxTop = window.innerHeight - 40;
+  if(top > maxTop){ top = rect.top + caret.top - npInput.scrollTop - 206; }
+  npSuggestEl.style.top = top + 'px'; npSuggestEl.style.left = left + 'px';
+}
+function positionSuggestDropdown(){ positionSuggestDropdownAt(npInput.selectionStart); }
+
+function renderSuggestList(){
+  npSuggestEl.innerHTML = npSuggestState.matches.map(function(name, i){
+    var cls = 'np-sugg-item' + (i === npSuggestState.highlightIndex ? ' active' : '');
+    return '<div class="' + cls + '" data-idx="' + i + '">' + escapeHtml(name) + '</div>';
+  }).join('');
+  Array.prototype.forEach.call(npSuggestEl.querySelectorAll('.np-sugg-item'), function(el){
+    el.addEventListener('mousedown', function(e){
+      e.preventDefault();
+      applySuggestion(parseInt(el.getAttribute('data-idx'), 10));
+    });
+  });
+}
+function showSuggestions(matches, start, end){
+  npSuggestState.active = true;
+  npSuggestState.matches = matches; npSuggestState.replaceStart = start;
+  npSuggestState.replaceEnd = end; npSuggestState.highlightIndex = 0;
+  renderSuggestList(); positionSuggestDropdownAt(start); npSuggestEl.style.display = 'block';
+}
+function hideSuggestions(){ npSuggestState.active = false; npSuggestEl.style.display = 'none'; }
+
+function updateSuggestions(){
+  var pos = npInput.selectionStart;
+  if(pos !== npInput.selectionEnd){ hideSuggestions(); return; }
+  var value = npInput.value;
+  var info = getWordBeforeCaret(value, pos);
+  var word = info.word;
+  if(word.length < 2){ hideSuggestions(); return; }
+  var lower = word.toLowerCase();
+  var matches = npKnownVars.filter(function(name){
+    return name.toLowerCase().indexOf(lower) === 0 && name.toLowerCase() !== lower;
+  }).slice(0, 8);
+  if(matches.length){ showSuggestions(matches, info.start, pos); }
+  else { hideSuggestions(); }
+}
+function applySuggestion(index){
+  var picked = npSuggestState.matches[index];
+  if(!picked){ hideSuggestions(); return; }
+  var value = npInput.value;
+  var before = value.slice(0, npSuggestState.replaceStart);
+  var after = value.slice(npSuggestState.replaceEnd);
+  var inserted = picked + ' ';
+  npInput.value = before + inserted + after;
+  var newPos = before.length + inserted.length;
+  npInput.selectionStart = npInput.selectionEnd = newPos;
+  hideSuggestions(); renderNotepad(); npScheduleSave(); npInput.focus();
+}
+document.addEventListener('click', function(e){
+  if(e.target === npInput || npSuggestEl.contains(e.target)){ return; }
+  hideSuggestions();
+});
+window.addEventListener('resize', function(){ if(npSuggestState.active){ positionSuggestDropdown(); } });
+
 npInput.addEventListener('input', function(e){
-  renderNotepad(); npScheduleSave(); updateSuggestions(); scheduleFinalizeCheck(); maybeAutoCorrectWord(e);
+  renderNotepad(); npScheduleSave(); scheduleFinalizeCheck(); updateSuggestions();
 });
 npInput.addEventListener('scroll', function(){
   npOverlay.scrollTop = npInput.scrollTop; npOverlay.scrollLeft = npInput.scrollLeft; npGutter.scrollTop = npInput.scrollTop;
@@ -1634,290 +1727,10 @@ npOverlay.addEventListener('click', function(e){
   }
 });
 
-/* Autocomplete & Thesaurus */
-var npKnownVars = [];
-var npSuggestEl = document.getElementById('npSuggest');
-var npMirrorEl = null;
-var npSuggestState = { active: false, mode: 'complete', matches: [], replaceStart: 0, replaceEnd: 0, highlightIndex: 0 };
-var npSuggestGen = 0;
-var npSugCache = {}; var npSynCache = {}; var npSpellCache = {};
-var npCompletionTimer = null;
-
-function getWordBeforeCaret(value, pos){
-  var start = pos;
-  while(start > 0 && /[A-Za-z0-9_]/.test(value[start - 1])){ start--; }
-  return { start: start, word: value.slice(start, pos) };
-}
-
-function getWordAtCaret(value, pos){
-  var start = pos, end = pos;
-  while(start > 0 && /[A-Za-z']/.test(value[start - 1])){ start--; }
-  while(end < value.length && /[A-Za-z']/.test(value[end])){ end++; }
-  return { start: start, end: end, word: value.slice(start, end) };
-}
-
-function datamuseFetch(url, cache, key, cb){
-  if(Object.prototype.hasOwnProperty.call(cache, key)){ cb(cache[key]); return; }
-  fetch(url).then(function(r){ return r.ok ? r.json() : []; }).then(function(data){
-    var words = (data || []).map(function(d){ return d.word; }).filter(function(w){
-      return /^[a-z]+(?:[ '-][a-z]+)*$/i.test(w);
-    });
-    cache[key] = words; cb(words);
-  }).catch(function(){ cb([]); });
-}
-
-function fetchCompletions(prefix, cb){ datamuseFetch('https://api.datamuse.com/sug?s=' + encodeURIComponent(prefix) + '&max=6', npSugCache, prefix.toLowerCase(), cb); }
-function fetchSpelling(word, cb){ datamuseFetch('https://api.datamuse.com/words?sp=' + encodeURIComponent(word) + '&max=5', npSpellCache, word.toLowerCase(), cb); }
-function fetchSynonyms(word, cb){ datamuseFetch('https://api.datamuse.com/words?rel_syn=' + encodeURIComponent(word) + '&max=10', npSynCache, word.toLowerCase(), cb); }
-
-var NP_AC_ENABLED_KEY = 'notepad-calculator-fullpage-autocorrect-v1';
-var npAutoCorrectEnabled = true;
-try{
-  var storedAc = localStorage.getItem(NP_AC_ENABLED_KEY);
-  if(storedAc !== null){ npAutoCorrectEnabled = storedAc === '1'; }
-}catch(e){}
-
-function applyAutoCorrectButtonState(){
-  var btn = document.getElementById('npAutoCorrect');
-  btn.textContent = 'Auto-correct: ' + (npAutoCorrectEnabled ? 'On' : 'Off');
-  btn.classList.toggle('on', npAutoCorrectEnabled);
-  btn.classList.toggle('off', !npAutoCorrectEnabled);
-}
-applyAutoCorrectButtonState();
-
-document.getElementById('npAutoCorrect').addEventListener('click', function(){
-  npAutoCorrectEnabled = !npAutoCorrectEnabled;
-  applyAutoCorrectButtonState();
-  try{ localStorage.setItem(NP_AC_ENABLED_KEY, npAutoCorrectEnabled ? '1' : '0'); }catch(e){}
-});
-
-var NP_AC_SKIP_WORDS = {
-  today:1, now:1, sum:1, avg:1, average:1, min:1, max:1, count:1, sqrt:1, cbrt:1, abs:1, ln:1, log:1, log2:1, exp:1,
-  round:1, floor:1, ceil:1, mod:1, fact:1, sin:1, cos:1, tan:1, asin:1, acos:1, atan:1, pi:1, e:1, year:1, month:1,
-  day:1, hour:1, minute:1, second:1, weekday:1, mo:1, usd:1, eur:1, inr:1, gbp:1, km:1, miles:1, lbs:1, kg:1
-};
-
-function maybeAutoCorrectWord(e){
-  if(!npAutoCorrectEnabled){ return; }
-  if(!e || e.inputType !== 'insertText' || e.data !== ' '){ return; }
-  var pos = npInput.selectionStart;
-  if(pos !== npInput.selectionEnd){ return; }
-  var value = npInput.value;
-  var end = pos - 1;
-  if(end < 0 || value[end] !== ' '){ return; }
-  var start = end;
-  while(start > 0 && /[A-Za-z0-9]/.test(value[start - 1])){ start--; }
-  var word = value.slice(start, end);
-  if(!word || word.length < 2){ return; }
-
-  var replacement = word;
-
-  // 1. Correct two initial consecutive capitals (e.g. "THis" -> "This")
-  if(/^([A-Z]{2})([a-z]+)$/.test(replacement)){
-    replacement = replacement.charAt(0) + replacement.charAt(1).toLowerCase() + replacement.slice(2);
-  }
-
-  // 2. Capitalize names of days
-  var daysMap = {
-    'sunday': 'Sunday', 'monday': 'Monday', 'tuesday': 'Tuesday',
-    'wednesday': 'Wednesday', 'thursday': 'Thursday', 'friday': 'Friday', 'saturday': 'Saturday'
-  };
-  if(daysMap[replacement.toLowerCase()]){
-    replacement = daysMap[replacement.toLowerCase()];
-  }
-
-  // 3. Capitalize first letter of sentence (after start of line or [.!?])
-  var contextBefore = value.slice(0, start).trimEnd();
-  var isSentenceStart = (contextBefore.length === 0 || /[.!?]$/.test(contextBefore) || value.slice(0, start).lastIndexOf('\n') === start - 1);
-  if(isSentenceStart && /^[a-z]/.test(replacement)){
-    replacement = replacement.charAt(0).toUpperCase() + replacement.slice(1);
-  }
-
-  // Apply quick auto-corrections immediately
-  if(replacement !== word){
-    var before = value.slice(0, start);
-    var after = value.slice(end);
-    npInput.value = before + replacement + after;
-    var shift = replacement.length - word.length;
-    npInput.selectionStart = npInput.selectionEnd = pos + shift;
-    renderNotepad(); npScheduleSave();
-    return;
-  }
-
-  // 4. Fallback to dictionary spelling suggestions
-  if(word.length < 4 || !/^[A-Za-z]+$/.test(word)){ return; }
-  var lower = word.toLowerCase();
-  if(NP_AC_SKIP_WORDS[lower]){ return; }
-  if(npKnownVars.some(function(v){ return v.toLowerCase() === lower; })){ return; }
-  fetchSpelling(word, function(suggestions){
-    if(!suggestions.length){ return; }
-    var top = suggestions[0];
-    if(top.toLowerCase() === lower){ return; }
-    if(npInput.value.slice(start, end) !== word){ return; }
-    var corrected = top;
-    if(word === word.toUpperCase()){ corrected = top.toUpperCase(); }
-    else if(word[0] === word[0].toUpperCase()){ corrected = top.charAt(0).toUpperCase() + top.slice(1); }
-    var before = value.slice(0, start);
-    var after = value.slice(end);
-    var shift = corrected.length - word.length;
-    var curPos = npInput.selectionStart;
-    npInput.value = before + corrected + after;
-    npInput.selectionStart = npInput.selectionEnd = curPos + shift;
-    renderNotepad(); npScheduleSave();
-  });
-}
-
-function createMirror(){
-  var div = document.createElement('div');
-  var style = div.style;
-  var computed = window.getComputedStyle(npInput);
-  style.position = 'absolute'; style.visibility = 'hidden'; style.top = '0'; style.left = '-9999px'; style.whiteSpace = 'pre';
-  ['fontFamily','fontSize','fontWeight','fontStyle','letterSpacing','lineHeight',
-   'paddingTop','paddingRight','paddingBottom','paddingLeft',
-   'borderTopWidth','borderRightWidth','borderBottomWidth','borderLeftWidth','boxSizing'
-  ].forEach(function(prop){ style[prop] = computed[prop]; });
-  document.body.appendChild(div);
-  return div;
-}
-
-function getCaretCoords(position){
-  if(!npMirrorEl){ npMirrorEl = createMirror(); }
-  var value = npInput.value;
-  npMirrorEl.textContent = value.substring(0, position);
-  var span = document.createElement('span');
-  span.textContent = value.substring(position) || '.';
-  npMirrorEl.appendChild(span);
-  return { top: span.offsetTop, left: span.offsetLeft };
-}
-
-function positionSuggestDropdownAt(pos){
-  var rect = npInput.getBoundingClientRect();
-  var caret = getCaretCoords(pos);
-  var lineHeight = parseInt(window.getComputedStyle(npInput).lineHeight) || 26;
-  var top = rect.top + caret.top + lineHeight - npInput.scrollTop;
-  var left = rect.left + caret.left - npInput.scrollLeft;
-  var maxLeft = window.innerWidth - 270;
-  if(left > maxLeft){ left = maxLeft; } if(left < 8){ left = 8; }
-  var maxTop = window.innerHeight - 40;
-  if(top > maxTop){ top = rect.top + caret.top - npInput.scrollTop - 226; }
-  npSuggestEl.style.top = top + 'px'; npSuggestEl.style.left = left + 'px';
-}
-function positionSuggestDropdown(){ positionSuggestDropdownAt(npInput.selectionStart); }
-
-function renderSuggestList(){
-  if(!npSuggestState.matches.length){
-    npSuggestEl.innerHTML = '<div class="np-sugg-item disabled">No matches found</div>';
-    return;
-  }
-  npSuggestEl.innerHTML = npSuggestState.matches.map(function(name, i){
-    var cls = 'np-sugg-item' + (i === npSuggestState.highlightIndex ? ' active' : '');
-    return '<div class="' + cls + '" data-idx="' + i + '">' + escapeHtml(name) + '</div>';
-  }).join('');
-  Array.prototype.forEach.call(npSuggestEl.querySelectorAll('.np-sugg-item:not(.disabled)'), function(el){
-    el.addEventListener('mousedown', function(e){
-      e.preventDefault();
-      applySuggestion(parseInt(el.getAttribute('data-idx'), 10));
-    });
-  });
-}
-
-function showSuggestions(matches, start, end, mode){
-  npSuggestState.active = true; npSuggestState.mode = mode || 'complete';
-  npSuggestState.matches = matches; npSuggestState.replaceStart = start;
-  npSuggestState.replaceEnd = end; npSuggestState.highlightIndex = 0;
-  renderSuggestList(); positionSuggestDropdownAt(start); npSuggestEl.style.display = 'block';
-}
-
-function hideSuggestions(){ npSuggestState.active = false; npSuggestEl.style.display = 'none'; }
-
-function mergeUnique(lists, excludeLower){
-  var seen = {}; var out = [];
-  lists.forEach(function(list){
-    list.forEach(function(w){
-      var lw = w.toLowerCase();
-      if(seen[lw] || lw === excludeLower){ return; }
-      seen[lw] = true; out.push(w);
-    });
-  });
-  return out.slice(0, 8);
-}
-
-function updateSuggestions(){
-  var pos = npInput.selectionStart;
-  if(pos !== npInput.selectionEnd){ hideSuggestions(); return; }
-  var value = npInput.value;
-  var info = getWordBeforeCaret(value, pos);
-  var word = info.word;
-  if(word.length < 2){ hideSuggestions(); return; }
-  var lower = word.toLowerCase();
-
-  var varMatches = npKnownVars.filter(function(name){
-    return name.toLowerCase().indexOf(lower) === 0 && name.toLowerCase() !== lower;
-  });
-
-  if(varMatches.length){ showSuggestions(varMatches.slice(0, 8), info.start, pos, 'complete'); }
-  else { hideSuggestions(); }
-
-  var myGen = ++npSuggestGen;
-  clearTimeout(npCompletionTimer);
-  npCompletionTimer = setTimeout(function(){
-    fetchCompletions(word, function(words){
-      if(myGen !== npSuggestGen){ return; }
-      var merged = mergeUnique([varMatches, words], lower);
-      if(!merged.length){ hideSuggestions(); return; }
-      showSuggestions(merged, info.start, pos, 'complete');
-    });
-  }, 220);
-}
-
-function applySuggestion(index){
-  var picked = npSuggestState.matches[index];
-  if(!picked){ hideSuggestions(); return; }
-  var value = npInput.value;
-  var before = value.slice(0, npSuggestState.replaceStart);
-  var after = value.slice(npSuggestState.replaceEnd);
-  var inserted = npSuggestState.mode === 'thesaurus' ? picked : (picked + ' ');
-  npInput.value = before + inserted + after;
-  var newPos = before.length + inserted.length;
-  npInput.selectionStart = npInput.selectionEnd = newPos;
-  hideSuggestions(); renderNotepad(); npScheduleSave(); npInput.focus();
-}
-
-document.getElementById('npThesaurus').addEventListener('click', function(){
-  var value = npInput.value;
-  var selStart = npInput.selectionStart, selEnd = npInput.selectionEnd;
-  var start, end, word;
-  if(selEnd > selStart){
-    word = value.slice(selStart, selEnd).trim();
-    start = selStart; end = selEnd;
-  } else {
-    var info = getWordAtCaret(value, selStart);
-    word = info.word; start = info.start; end = info.end;
-  }
-  if(!word){ return; }
-  npInput.focus(); npInput.selectionStart = start; npInput.selectionEnd = end;
-  fetchSynonyms(word, function(syns){ showSuggestions(syns, start, end, 'thesaurus'); });
-});
-
 function flashStatus(msg, ms){
   npSavedStatus.textContent = msg;
   setTimeout(function(){ if(npSavedStatus.textContent === msg){ npSavedStatus.textContent = ''; } }, ms || 1400);
 }
-
-document.getElementById('npSpelling').addEventListener('click', function(){
-  var selStart = npInput.selectionStart, selEnd = npInput.selectionEnd;
-  if(selEnd <= selStart){ flashStatus('Select a word or phrase first'); return; }
-  var text = npInput.value.slice(selStart, selEnd).trim();
-  if(!text){ return; }
-  npInput.focus(); npInput.selectionStart = selStart; npInput.selectionEnd = selEnd;
-  fetchSpelling(text, function(suggestions){ showSuggestions(suggestions, selStart, selEnd, 'thesaurus'); });
-});
-
-document.addEventListener('click', function(e){
-  if(e.target === npInput || npSuggestEl.contains(e.target)){ return; }
-  hideSuggestions();
-});
-window.addEventListener('resize', function(){ if(npSuggestState.active){ positionSuggestDropdown(); } });
 
 npInput.addEventListener('keydown', function(e){
   if(npSuggestState.active){
@@ -2312,11 +2125,26 @@ function parseLineTimer(rawLine, index){
     line = line.slice(0, thenMatch.index).trim();
   }
 
+  // "when CONDITION" (only meaningful on calc-type every/at/after timers, which
+  // always end in "| expr") gates the timer behind a condition: it stays fully
+  // dormant -- just like "manual" -- and only arms itself once CONDITION
+  // evaluates truthy. CONDITION is any expression the normal engine supports,
+  // so it can read another timer's output via the line it writes to (e.g.
+  // "when L5 >= 100"), or a calendar/date comparison (e.g. "when today >=
+  // 2026-09-01"), or both combined with && / ||. Implies "manual" automatically.
+  var whenExpr = '';
+  var whenMatch = line.match(/\s+when\s+(.+?)\s*(?=\|)/i);
+  if(whenMatch){
+    whenExpr = whenMatch[1].trim();
+    line = (line.slice(0, whenMatch.index) + ' ' + line.slice(whenMatch.index + whenMatch[0].length)).replace(/\s{2,}/g, ' ').trim();
+  }
+
   // "manual" marks a calc-type timer (every/at/after) as dormant -- it won't
   // auto-run on its own schedule until something (typically another timer's
-  // "then start") activates it. Has no effect on stopwatch/countdown/reminder,
-  // which are already dormant until started/due by design.
-  var manual = false;
+  // "then start", or a "when" condition above) activates it. Has no effect on
+  // stopwatch/countdown/reminder, which are already dormant until started/due
+  // by design.
+  var manual = !!whenExpr;
   var manualMatch = line.match(/(^|\s)manual(\s|$)/i);
   if(manualMatch){
     line = (line.slice(0, manualMatch.index) + ' ' + line.slice(manualMatch.index + manualMatch[0].length)).replace(/\s{2,}/g, ' ').trim();
@@ -2353,15 +2181,15 @@ function parseLineTimer(rawLine, index){
     var initialDelay = parseScheduleDuration(match[1].trim());
     var everyDuration = parseScheduleDuration(match[2].trim());
     if(!initialDelay || !everyDuration){ return null; }
-    return { type:type, key:type + ':' + rawTrimmed, duration:everyDuration, initialDelay:initialDelay, mode:'every', expr:match[3].trim(), label:label, thenStart:thenStart, manual:manual };
+    return { type:type, key:type + ':' + rawTrimmed, duration:everyDuration, initialDelay:initialDelay, mode:'every', expr:match[3].trim(), label:label, thenStart:thenStart, manual:manual, whenExpr:whenExpr };
   } else if((match = line.match(/^(every|after)\s+(.+?)\s*\|\s*(.+)$/i))){
     type = 'calc'; duration = parseScheduleDuration(match[2]);
     if(!duration){ return null; }
-    return { type:type, key:type + ':' + rawTrimmed, duration:duration, mode:match[1].toLowerCase(), expr:match[3].trim(), label:label, thenStart:thenStart, manual:manual };
-  } else if((match = line.match(/^(?:at|on)\s+(.+?)\s*\|\s*(.+)$/i))){
+    return { type:type, key:type + ':' + rawTrimmed, duration:duration, mode:match[1].toLowerCase(), expr:match[3].trim(), label:label, thenStart:thenStart, manual:manual, whenExpr:whenExpr };
+  } else if((match = line.match(/^(?:at|on)\s+(.+?)(?:\s*\|\s*(.+))?$/i))){
     type = 'calc'; when = new Date(match[1].trim()).getTime();
     if(!when || isNaN(when)){ return null; }
-    return { type:type, key:type + ':' + rawTrimmed, when:when, mode:'at', expr:match[2].trim(), label:label, thenStart:thenStart, manual:manual };
+    return { type:type, key:type + ':' + rawTrimmed, when:when, mode:'at', expr:(match[2] || '').trim(), label:label, thenStart:thenStart, manual:manual, whenExpr:whenExpr };
   } else { return null; }
   return { type:type, key:type + ':' + rawTrimmed, duration:duration, when:when, note:note, label:label, thenStart:thenStart, manual:manual };
 }
@@ -2377,7 +2205,7 @@ function triggerThenStart(name){
     } else if(t.type === 'sw'){
       if(!t.started){ t.started = Date.now(); }
     } else if(t.type === 'calc'){
-      t.canceled = false; t.done = false; t.paused = false; t.pausedRemaining = 0; t.firstRunDone = false;
+      t.canceled = false; t.done = false; t.paused = false; t.pausedRemaining = 0; t.firstRunDone = false; t.whenSatisfied = true;
       t.nextAt = Date.now() + (t.initialDelay !== undefined ? t.initialDelay : t.duration);
     } else if(t.type === 'rem'){
       t.canceled = false; t.fired = false; t.when = Date.now() + 1000;
@@ -2394,7 +2222,7 @@ function getLineTimer(spec){
     var firstNextAt = (spec.type === 'calc' && !isDormant)
       ? (spec.when || (Date.now() + (spec.initialDelay !== undefined ? spec.initialDelay : spec.duration)))
       : 0;
-    state = npLineTimers[spec.key] = { type:spec.type, duration:spec.duration, initialDelay:spec.initialDelay, when:spec.when, note:spec.note, mode:spec.mode, expr:spec.expr, label:spec.label || '', thenStart:spec.thenStart || '', manual:!!spec.manual, elapsed:0, started:0, endAt:0, canceled:isDormant, fired:false, nextAt:firstNextAt, lastResult:'', done:false, paused:false, pausedRemaining:0, firstRunDone:false };
+    state = npLineTimers[spec.key] = { type:spec.type, duration:spec.duration, initialDelay:spec.initialDelay, when:spec.when, note:spec.note, mode:spec.mode, expr:spec.expr, label:spec.label || '', thenStart:spec.thenStart || '', manual:!!spec.manual, whenExpr:spec.whenExpr || '', whenSatisfied:false, elapsed:0, started:0, endAt:0, canceled:isDormant, fired:false, nextAt:firstNextAt, lastResult:'', done:false, paused:false, pausedRemaining:0, firstRunDone:false };
   }
   return state;
 }
@@ -2416,7 +2244,11 @@ function lineTimerMarkup(rawLine, index){
   }
   if(spec.type === 'calc'){
     var calcLabel;
-    if(state.canceled){ calcLabel = (state.manual && !state.firstRunDone && state.lastResult === '') ? ('Waiting' + (state.thenStart ? '' : ' (manual)')) : 'Cancelled'; }
+    if(state.canceled){
+      if(state.whenExpr && !state.whenSatisfied){ calcLabel = 'Waiting for condition'; }
+      else if(state.manual && !state.firstRunDone && state.lastResult === ''){ calcLabel = 'Waiting' + (state.thenStart ? '' : ' (manual)'); }
+      else { calcLabel = 'Cancelled'; }
+    }
     else if(state.done){ calcLabel = 'Done'; }
     else if(state.paused){ calcLabel = 'Paused (' + formatHMS(Math.max(0, state.pausedRemaining) / 1000) + ' left)'; }
     else {
@@ -2424,7 +2256,7 @@ function lineTimerMarkup(rawLine, index){
       calcLabel = 'Next ' + formatReminderTime(state.nextAt) + ' (in ' + (msLeft > 0 ? formatHMS(msLeft / 1000) : '00:00:00') + ')';
     }
     if(state.lastResult){ calcLabel += ' • ' + state.lastResult; }
-    return '<span class="np-line-timer">' + labelHtml + '<span class="np-line-timer-note" title="' + escapeHtml(spec.expr) + '">' + escapeHtml(calcLabel) + '</span><button data-line-timer-action="calc-run" data-line-timer-key="' + key + '">Run</button>' + (!state.canceled && !state.done ? '<button class="' + (state.paused ? 'running' : '') + '" data-line-timer-action="calc-pause" data-line-timer-key="' + key + '">' + (state.paused ? 'Resume' : 'Pause') + '</button><button data-line-timer-action="calc-cancel" data-line-timer-key="' + key + '">Cancel</button>' : '') + '<button data-line-timer-action="calc-reset" data-line-timer-key="' + key + '">Reset</button></span>';
+    return '<span class="np-line-timer">' + labelHtml + '<span class="np-line-timer-note" title="' + escapeHtml(spec.whenExpr ? ('when ' + spec.whenExpr + ' | ' + spec.expr) : spec.expr) + '">' + escapeHtml(calcLabel) + '</span><button data-line-timer-action="calc-run" data-line-timer-key="' + key + '">Run</button>' + (!state.canceled && !state.done ? '<button class="' + (state.paused ? 'running' : '') + '" data-line-timer-action="calc-pause" data-line-timer-key="' + key + '">' + (state.paused ? 'Resume' : 'Pause') + '</button><button data-line-timer-action="calc-cancel" data-line-timer-key="' + key + '">Cancel</button>' : '') + '<button data-line-timer-action="calc-reset" data-line-timer-key="' + key + '">Reset</button></span>';
   }
   var remLabel = state.canceled ? 'Cancelled' : (state.fired ? 'Done' : 'Due ' + formatReminderTime(state.when));
   return '<span class="np-line-timer">' + labelHtml + '<span class="np-line-timer-note">' + escapeHtml(remLabel + (state.note ? ': ' + state.note : '')) + '</span>' + (!state.canceled && !state.fired ? '<button data-line-timer-action="rem-cancel" data-line-timer-key="' + key + '">Cancel</button>' : '') + '</span>';
@@ -2443,9 +2275,15 @@ function handleLineTimerAction(action, key){
   }
   else if(action === 'calc-cancel'){ state.canceled = true; }
   else if(action === 'calc-reset'){
-    state.canceled = false; state.done = false; state.paused = false; state.pausedRemaining = 0;
+    state.done = false; state.paused = false; state.pausedRemaining = 0;
     state.lastResult = ''; state.firstRunDone = false;
-    state.nextAt = Date.now() + (state.initialDelay !== undefined ? state.initialDelay : state.duration);
+    if(state.whenExpr){
+      // Re-arm: go back to waiting for the condition rather than running now.
+      state.canceled = true; state.whenSatisfied = false;
+    } else {
+      state.canceled = false;
+      state.nextAt = Date.now() + (state.initialDelay !== undefined ? state.initialDelay : state.duration);
+    }
   }
   scheduleLineTimerSave();
   renderNotepad();
@@ -2490,7 +2328,7 @@ function runTimerExprStatements(exprText){
   return summaryParts.join(', ');
 }
 function runScheduledCalculation(state, key){
-  state.lastResult = runTimerExprStatements(state.expr);
+  state.lastResult = state.expr ? runTimerExprStatements(state.expr) : '';
   // For an "after <delay> every <interval>" timer, the FIRST run is the moment
   // the initial wait ends and the recurring cycle begins -- show the same
   // finished-popup a plain countdown would, as the visible/audible signal that
@@ -2503,6 +2341,18 @@ function runScheduledCalculation(state, key){
   if(state.mode === 'every'){ state.nextAt = Date.now() + state.duration; }
   else { state.done = true; if(state.thenStart){ triggerThenStart(state.thenStart); } }
   scheduleLineTimerSave();
+}
+function evaluateConditionExpr(exprText){
+  // Read-only truthy check for a "when" gate condition -- reuses the full
+  // expression engine (comparisons, if/then/else, date logic, L# refs to
+  // whatever line another timer's output was written to) but never writes
+  // anything back, unlike runTimerExprStatements.
+  var scratch = npInput.value.split('\n');
+  scratch.push(exprText);
+  var idx = scratch.length - 1;
+  var out = evaluateNotepad(scratch.join('\n')).results[idx] || '';
+  var val = parseFloat(out.replace(/^=\s*/, ''));
+  return !isNaN(val) && val !== 0;
 }
 function tickLineTimers(){
   var now = Date.now(), changed = false;
@@ -2520,6 +2370,14 @@ function tickLineTimers(){
       showAlarm('Reminder', state.note || 'Reminder due');
       if(state.thenStart){ triggerThenStart(state.thenStart); }
       changed = true;
+    }
+    if(state.type === 'calc' && state.whenExpr && state.canceled && !state.whenSatisfied && !state.done){
+      if(evaluateConditionExpr(state.whenExpr)){
+        state.whenSatisfied = true;
+        state.canceled = false; state.done = false; state.paused = false; state.pausedRemaining = 0; state.firstRunDone = false;
+        state.nextAt = Date.now() + (state.initialDelay !== undefined ? state.initialDelay : state.duration);
+        changed = true;
+      }
     }
     if(state.type === 'calc' && !state.canceled && !state.done && !state.paused && state.nextAt <= now){ runScheduledCalculation(state, key); changed = true; }
   });
