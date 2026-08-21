@@ -502,6 +502,25 @@ try{
     npCsvIndex = parsedCsv.index || 0;
   }
 }catch(e){}
+// A CSV with a name-like column and a price-like column (e.g. "Product, Price")
+// makes every row's name usable directly in formulas, standing in for its price
+// -- e.g. "Pen*2 + Pencil*5" -- without typing "Pen = 20" first. Rebuilt whenever
+// CSV data loads or changes; a user-defined variable of the same name always wins.
+var npCsvPriceMap = {};
+function rebuildCsvPriceMap(){
+  npCsvPriceMap = {};
+  if(!npCsvHeaders.length || !npCsvRows.length){ return; }
+  var nameCol = npCsvHeaders.filter(function(h){ return /name|product|item/i.test(h); })[0] || npCsvHeaders[0];
+  var priceCol = npCsvHeaders.filter(function(h){ return /price|cost|amount|value|rate/i.test(h); })[0]
+    || npCsvHeaders.filter(function(h){ return h !== nameCol; })[0] || npCsvHeaders[0];
+  npCsvRows.forEach(function(row){
+    var name = (row[nameCol] || '').trim();
+    var priceRaw = (row[priceCol] || '').replace(/[^0-9.\-]/g, '');
+    var price = parseFloat(priceRaw);
+    if(name && !isNaN(price)){ npCsvPriceMap[name] = price; }
+  });
+}
+rebuildCsvPriceMap();
 try{
   var storedLinks = localStorage.getItem(NP_CSV_LINKS_KEY);
   npLineLinks = storedLinks ? JSON.parse(storedLinks) : {};
@@ -899,6 +918,23 @@ function tryDateArithmetic(exprText, dateScope){
   return { date: result, hasTime: hasTime };
 }
 
+function substituteCsvPrices(exprText, scope){
+  // Every CSV row's name column becomes usable directly in formulas as a
+  // stand-in for its price column -- e.g. "Pen*2 + Pencil*5" -- once a CSV
+  // with product/price-like columns has been imported. A user-defined
+  // variable (assigned with "=" anywhere in the notepad) of the same name
+  // always takes precedence, so this never silently overrides your own work.
+  var names = Object.keys(npCsvPriceMap);
+  if(!names.length){ return exprText; }
+  names.sort(function(a, b){ return b.length - a.length; }); // longest first, so multi-word names aren't shadowed by a shorter prefix
+  names.forEach(function(name){
+    if(Object.prototype.hasOwnProperty.call(scope, name)){ return; }
+    if(Object.prototype.hasOwnProperty.call(NP_BUILTINS, name)){ return; }
+    var re = new RegExp('\\b' + escapeRegExp(name) + '\\b', 'gi');
+    exprText = exprText.replace(re, '(' + npCsvPriceMap[name] + ')');
+  });
+  return exprText;
+}
 function substituteIfThenElse(exprText){
   // "if COND then A else B" -> "((COND)?(A):(B))". The else-branch is greedy
   // and re-processed recursively, so "if a then 1 else if b then 2 else 3"
@@ -956,6 +992,7 @@ function evaluateNotepad(text){
       }
     }
 
+    exprText = substituteCsvPrices(exprText, scope);
     exprText = substituteIfThenElse(exprText);
 
     if(selfUpdateName === null){
@@ -1556,6 +1593,7 @@ npCsvFile.addEventListener('change', function(){
       }
     });
     npScheduleCsvLinksSave();
+    rebuildCsvPriceMap();
 
     refreshCsvNav();
     applyCsvRecordToText(npCsvRows[0]);
@@ -1569,7 +1607,7 @@ document.getElementById('npCsvNext').addEventListener('click', function(){ goToC
 document.getElementById('npCsvSelect').addEventListener('change', function(e){ goToCsvRecord(parseInt(e.target.value, 10) || 0); });
 document.getElementById('npCsvResetLinks').addEventListener('click', function(){
   npLineLinks = {}; npCsvHeaders = []; npCsvRows = []; npCsvIdColumn = null; npCsvIndex = 0;
-  npScheduleCsvLinksSave(); npScheduleCsvSave(); npCsvFile.value = ''; renderNotepad();
+  npScheduleCsvLinksSave(); npScheduleCsvSave(); npCsvFile.value = ''; rebuildCsvPriceMap(); renderNotepad();
   var btn = document.getElementById('npCsvResetLinks');
   var original = btn.textContent;
   btn.textContent = 'Reset ✓'; btn.disabled = true;
@@ -1577,16 +1615,27 @@ document.getElementById('npCsvResetLinks').addEventListener('click', function(){
 });
 refreshCsvNav();
 
-/* ---------------- Variable name autocomplete ---------------- */
+/* ---------------- Variable & CSV product-name autocomplete ---------------- */
 var npKnownVars = [];
 var npSuggestEl = document.getElementById('npSuggest');
 var npVarMirrorEl = null;
-var npSuggestState = { active: false, matches: [], replaceStart: 0, replaceEnd: 0, highlightIndex: 0 };
+// Each match is its own {name, start, end} so multi-word CSV names (e.g. "Ball
+// Pen") and single-word variable names can be suggested side by side even
+// though they're matched against different amounts of text before the caret.
+var npSuggestState = { active: false, matches: [], highlightIndex: 0 };
 
 function getWordBeforeCaret(value, pos){
   var start = pos;
   while(start > 0 && /[A-Za-z0-9_]/.test(value[start - 1])){ start--; }
   return { start: start, word: value.slice(start, pos) };
+}
+function getPhraseBeforeCaret(value, pos){
+  // Like getWordBeforeCaret, but also allows single spaces so a multi-word
+  // CSV product name ("Ball Pen") can be matched while it's still being typed.
+  var start = pos;
+  while(start > 0 && /[A-Za-z0-9_ ]/.test(value[start - 1])){ start--; }
+  while(start < pos && value[start] === ' '){ start++; }
+  return { start: start, phrase: value.slice(start, pos) };
 }
 
 function createVarMirror(){
@@ -1625,9 +1674,11 @@ function positionSuggestDropdownAt(pos){
 function positionSuggestDropdown(){ positionSuggestDropdownAt(npInput.selectionStart); }
 
 function renderSuggestList(){
-  npSuggestEl.innerHTML = npSuggestState.matches.map(function(name, i){
+  npSuggestEl.innerHTML = npSuggestState.matches.map(function(m, i){
     var cls = 'np-sugg-item' + (i === npSuggestState.highlightIndex ? ' active' : '');
-    return '<div class="' + cls + '" data-idx="' + i + '">' + escapeHtml(name) + '</div>';
+    var fromCsv = Object.prototype.hasOwnProperty.call(npCsvPriceMap, m.name);
+    var label = fromCsv ? (m.name + ' \u2014 ' + npCsvPriceMap[m.name]) : m.name;
+    return '<div class="' + cls + '" data-idx="' + i + '">' + escapeHtml(label) + '</div>';
   }).join('');
   Array.prototype.forEach.call(npSuggestEl.querySelectorAll('.np-sugg-item'), function(el){
     el.addEventListener('mousedown', function(e){
@@ -1636,11 +1687,10 @@ function renderSuggestList(){
     });
   });
 }
-function showSuggestions(matches, start, end){
+function showSuggestionMatches(matches, anchorPos){
   npSuggestState.active = true;
-  npSuggestState.matches = matches; npSuggestState.replaceStart = start;
-  npSuggestState.replaceEnd = end; npSuggestState.highlightIndex = 0;
-  renderSuggestList(); positionSuggestDropdownAt(start); npSuggestEl.style.display = 'block';
+  npSuggestState.matches = matches; npSuggestState.highlightIndex = 0;
+  renderSuggestList(); positionSuggestDropdownAt(anchorPos); npSuggestEl.style.display = 'block';
 }
 function hideSuggestions(){ npSuggestState.active = false; npSuggestEl.style.display = 'none'; }
 
@@ -1648,23 +1698,46 @@ function updateSuggestions(){
   var pos = npInput.selectionStart;
   if(pos !== npInput.selectionEnd){ hideSuggestions(); return; }
   var value = npInput.value;
-  var info = getWordBeforeCaret(value, pos);
-  var word = info.word;
-  if(word.length < 2){ hideSuggestions(); return; }
-  var lower = word.toLowerCase();
-  var matches = npKnownVars.filter(function(name){
-    return name.toLowerCase().indexOf(lower) === 0 && name.toLowerCase() !== lower;
-  }).slice(0, 8);
-  if(matches.length){ showSuggestions(matches, info.start, pos); }
+  var results = [];
+  var seen = {};
+
+  var wordInfo = getWordBeforeCaret(value, pos);
+  if(wordInfo.word.length >= 2){
+    var lowerW = wordInfo.word.toLowerCase();
+    var singleWordNames = npKnownVars.concat(Object.keys(npCsvPriceMap).filter(function(n){ return n.indexOf(' ') === -1; }));
+    singleWordNames.forEach(function(name){
+      var lname = name.toLowerCase();
+      if(lname.indexOf(lowerW) === 0 && lname !== lowerW && !seen[lname]){
+        seen[lname] = true;
+        results.push({ name: name, start: wordInfo.start, end: pos });
+      }
+    });
+  }
+
+  var phraseInfo = getPhraseBeforeCaret(value, pos);
+  if(phraseInfo.phrase.length >= 2){
+    var lowerP = phraseInfo.phrase.toLowerCase();
+    Object.keys(npCsvPriceMap).filter(function(n){ return n.indexOf(' ') !== -1; }).forEach(function(name){
+      var lname = name.toLowerCase();
+      if(lname.indexOf(lowerP) === 0 && lname !== lowerP && !seen[lname]){
+        seen[lname] = true;
+        results.push({ name: name, start: phraseInfo.start, end: pos });
+      }
+    });
+  }
+
+  results.sort(function(a, b){ return (a.end - a.start === b.end - b.start) ? 0 : (b.end - b.start) - (a.end - a.start); });
+  results = results.slice(0, 8);
+  if(results.length){ showSuggestionMatches(results, Math.min(wordInfo.start, phraseInfo.start)); }
   else { hideSuggestions(); }
 }
 function applySuggestion(index){
   var picked = npSuggestState.matches[index];
   if(!picked){ hideSuggestions(); return; }
   var value = npInput.value;
-  var before = value.slice(0, npSuggestState.replaceStart);
-  var after = value.slice(npSuggestState.replaceEnd);
-  var inserted = picked + ' ';
+  var before = value.slice(0, picked.start);
+  var after = value.slice(picked.end);
+  var inserted = picked.name + ' ';
   npInput.value = before + inserted + after;
   var newPos = before.length + inserted.length;
   npInput.selectionStart = npInput.selectionEnd = newPos;
