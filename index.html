@@ -39,13 +39,13 @@
   }
   h1{ font-size: 18px; font-weight: 700; margin: 0; }
   .top-row{ flex: 1; min-width: 0; }
-  #npClear, #npExport, #npImportBtn, #npCsvBtn, #npFontDown, #npFontUp, #npFind{
+  #npClear, #npExport, #npImportBtn, #npCsvBtn, #npCsvFromText, #npCsvExport, #npFontDown, #npFontUp, #npFind{
     height: 34px; padding: 0 14px; font-size: 13px; font-weight: 700; font-family: var(--font);
     border-radius: 8px; border: 1px solid var(--border); background: var(--card); color: var(--text-primary);
     cursor: pointer; flex-shrink: 0; margin-left: 8px;
   }
   #npFontDown, #npFontUp{ padding: 0 10px; }
-  #npClear:active, #npExport:active, #npImportBtn:active, #npCsvBtn:active, #npFontDown:active, #npFontUp:active, #npFind:active{ transform: scale(0.97); }
+  #npClear:active, #npExport:active, #npImportBtn:active, #npCsvBtn:active, #npCsvFromText:active, #npCsvExport:active, #npFontDown:active, #npFontUp:active, #npFind:active{ transform: scale(0.97); }
   .np-ts-bright-group{
     display: flex; align-items: center; gap: 0; margin-left: 8px; flex-shrink: 0;
     border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
@@ -319,6 +319,8 @@
     <input type="file" id="npImportFile" accept=".txt,text/plain" style="display:none;" />
     <button id="npCsvBtn">Import CSV</button>
     <input type="file" id="npCsvFile" accept=".csv,text/csv" style="display:none;" />
+    <button id="npCsvFromText" title="Type or paste CSV-style rows (e.g. Product,Price) directly in the notepad, select them, then click this — no separate file needed">CSV from Text</button>
+    <button id="npCsvExport" title="Save the currently loaded CSV data (however it was loaded/edited) as a downloadable .csv file">Export CSV</button>
     <button id="npFind" title="Find text (Ctrl/Cmd+F). Add Replace with the toggle inside.">Find</button>
     <button id="npTimerBtn" style="display:none" aria-hidden="true" tabindex="-1">Timer</button>
     <button id="npClear">Clear</button>
@@ -568,6 +570,20 @@ function parseCSV(text){
     return row;
   });
   return { headers: headers, rows: rows };
+}
+
+function csvEscapeField(val){
+  val = (val === undefined || val === null) ? '' : String(val);
+  if(/[",\n]/.test(val)){ return '"' + val.replace(/"/g, '""') + '"'; }
+  return val;
+}
+function buildCsvText(){
+  if(!npCsvHeaders.length){ return ''; }
+  var lines = [npCsvHeaders.map(csvEscapeField).join(',')];
+  npCsvRows.forEach(function(row){
+    lines.push(npCsvHeaders.map(function(h){ return csvEscapeField(row[h]); }).join(','));
+  });
+  return lines.join('\n');
 }
 
 function applyCsvRecordToText(record){
@@ -1569,6 +1585,49 @@ npImportFile.addEventListener('change', function(){
 var npCsvFile = document.getElementById('npCsvFile');
 document.getElementById('npCsvBtn').addEventListener('click', function(){
   npCsvFile.click();
+});
+document.getElementById('npCsvFromText').addEventListener('click', function(){
+  var selStart = npInput.selectionStart, selEnd = npInput.selectionEnd;
+  var text = selEnd > selStart ? npInput.value.slice(selStart, selEnd) : npInput.value;
+  var parsed = parseCSV(text);
+  if(!parsed.headers.length || !parsed.rows.length){
+    flashStatus('No CSV rows found' + (selEnd > selStart ? ' in selection' : ''));
+    return;
+  }
+  npCsvHeaders = parsed.headers;
+  npCsvRows = parsed.rows;
+  npCsvIndex = 0;
+  npCsvIdColumn = npCsvHeaders.filter(function(h){ return /^id$/i.test(h); })[0] || npCsvHeaders[0];
+
+  var existingVarNames = [];
+  npInput.value.split('\n').forEach(function(line){
+    var m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=/);
+    if(m){ existingVarNames.push(m[1]); }
+  });
+  npCsvHeaders.forEach(function(col){
+    if(existingVarNames.indexOf(col) !== -1 && !npLineLinks['var:' + col]){
+      npLineLinks['var:' + col] = col;
+    }
+  });
+  npScheduleCsvLinksSave();
+  rebuildCsvPriceMap();
+  refreshCsvNav();
+  npScheduleCsvSave();
+  flashStatus(parsed.rows.length + ' rows loaded');
+});
+document.getElementById('npCsvExport').addEventListener('click', function(){
+  if(!npCsvHeaders.length || !npCsvRows.length){ flashStatus('No CSV data loaded'); return; }
+  var text = buildCsvText();
+  var blob = new Blob([text], { type: 'text/csv' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  var stamp = new Date().toISOString().slice(0, 10);
+  a.href = url;
+  a.download = 'notepad-calculator-data-' + stamp + '.csv';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 });
 npCsvFile.addEventListener('change', function(){
   var file = npCsvFile.files && npCsvFile.files[0];
