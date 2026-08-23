@@ -39,13 +39,14 @@
   }
   h1{ font-size: 18px; font-weight: 700; margin: 0; }
   .top-row{ flex: 1; min-width: 0; }
-  #npClear, #npExport, #npImportBtn, #npCsvBtn, #npCsvFromText, #npCsvExport, #npFontDown, #npFontUp, #npFind{
+  #npClear, #npExport, #npImportBtn, #npCsvBtn, #npCsvFromText, #npCsvExport, #npRowView, #npFontDown, #npFontUp, #npFind{
     height: 34px; padding: 0 14px; font-size: 13px; font-weight: 700; font-family: var(--font);
     border-radius: 8px; border: 1px solid var(--border); background: var(--card); color: var(--text-primary);
     cursor: pointer; flex-shrink: 0; margin-left: 8px;
   }
   #npFontDown, #npFontUp{ padding: 0 10px; }
-  #npClear:active, #npExport:active, #npImportBtn:active, #npCsvBtn:active, #npCsvFromText:active, #npCsvExport:active, #npFontDown:active, #npFontUp:active, #npFind:active{ transform: scale(0.97); }
+  #npClear:active, #npExport:active, #npImportBtn:active, #npCsvBtn:active, #npCsvFromText:active, #npCsvExport:active, #npRowView:active, #npFontDown:active, #npFontUp:active, #npFind:active{ transform: scale(0.97); }
+  #npRowView[aria-pressed="true"]{ background: #01558A; border-color: #01558A; color: #fff; }
   .np-ts-bright-group{
     display: flex; align-items: center; gap: 0; margin-left: 8px; flex-shrink: 0;
     border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
@@ -120,6 +121,23 @@
     color: var(--text-secondary); opacity: 0.45; user-select: none;
   }
   #npGutter div{ padding-right: 10px; }
+
+  #npRowGutter{
+    flex-shrink: 0; width: 0; overflow: hidden; position: relative;
+    background: var(--card); border-right: 1px solid var(--border);
+    transition: width 0.15s ease;
+  }
+  #npRowGutter.active{ width: 34px; }
+  .np-row-bracket{
+    position: absolute; left: 6px; right: 4px;
+    border-left: 3px solid #01558A; border-radius: 2px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .np-row-bracket .row-label{
+    writing-mode: vertical-rl; transform: rotate(180deg);
+    font-family: var(--font-mono); font-size: 12px; font-weight: 700;
+    color: #01558A; white-space: nowrap; padding-left: 4px;
+  }
 
   textarea, #npOverlay{
     font-family: var(--font-mono); font-size: var(--np-font-size, 16px); font-weight: 700; line-height: var(--np-line-height, 30px);
@@ -321,6 +339,7 @@
     <input type="file" id="npCsvFile" accept=".csv,text/csv" style="display:none;" />
     <button id="npCsvFromText" title="Type or paste CSV-style rows (e.g. Product,Price) directly in the notepad, select them, then click this — no separate file needed">CSV from Text</button>
     <button id="npCsvExport" title="Save the currently loaded CSV data (however it was loaded/edited) as a downloadable .csv file">Export CSV</button>
+    <button id="npRowView" title="Toggle between single-record view and all CSV rows expanded in the notepad, grouped with row/column labels" aria-pressed="false">Row View</button>
     <button id="npFind" title="Find text (Ctrl/Cmd+F). Add Replace with the toggle inside.">Find</button>
     <button id="npTimerBtn" style="display:none" aria-hidden="true" tabindex="-1">Timer</button>
     <button id="npClear">Clear</button>
@@ -348,6 +367,7 @@
   </div>
 </header>
 <main>
+  <div id="npRowGutter"></div>
   <div id="npGutter"></div>
   <div id="npInputWrap">
     <textarea id="npInput" spellcheck="true" wrap="off"></textarea>
@@ -425,6 +445,7 @@
 var npInput = document.getElementById('npInput');
 var npOverlay = document.getElementById('npOverlay');
 var npGutter = document.getElementById('npGutter');
+var npRowGutter = document.getElementById('npRowGutter');
 var npSavedStatus = document.getElementById('npSavedStatus');
 var NP_STORAGE_KEY = 'notepad-calculator-fullpage-v1';
 var npDefaultText = "";
@@ -1249,6 +1270,7 @@ function renderNotepad(){
   var gutterHtml = lines.map(function(_, i){ return '<div>' + (i + 1) + '</div>'; }).join('');
   npGutter.innerHTML = gutterHtml;
   npGutter.scrollTop = npInput.scrollTop;
+  renderRowBrackets();
 }
 
 var npSaveTimer = null;
@@ -1629,6 +1651,63 @@ document.getElementById('npCsvExport').addEventListener('click', function(){
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 });
+
+/* ---------------- Row View: expand all CSV rows in-notepad ---------------- */
+// Toggling ON writes every CSV row as consecutive "Header = value" lines,
+// appended to the current notepad text, and remembers where that block starts
+// so the margin can draw a bracket + rotated "RowN" label per group. Toggling
+// OFF removes exactly that many lines again. Editing lines inside the block by
+// hand (adding/removing lines) will drift the bracket alignment, since it's
+// tracked by line count, not by content.
+var npRowViewActive = false;
+var npRowViewMeta = null;
+function buildRowViewText(){
+  var lines = [];
+  npCsvRows.forEach(function(row){
+    npCsvHeaders.forEach(function(h){ lines.push(h + ' = ' + (row[h] || '')); });
+  });
+  return lines.join('\n');
+}
+function renderRowBrackets(){
+  if(!npRowViewActive || !npRowViewMeta){
+    npRowGutter.classList.remove('active');
+    npRowGutter.innerHTML = '';
+    return;
+  }
+  npRowGutter.classList.add('active');
+  var lineHeight = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--np-line-height')) || 30;
+  var html = '';
+  for(var r = 0; r < npRowViewMeta.rowCount; r++){
+    var top = 18 + (npRowViewMeta.startLine + r * npRowViewMeta.colsPerRow) * lineHeight;
+    var height = npRowViewMeta.colsPerRow * lineHeight;
+    html += '<div class="np-row-bracket" style="top:' + top + 'px;height:' + height + 'px;"><span class="row-label">Row' + (r + 1) + '</span></div>';
+  }
+  npRowGutter.innerHTML = html;
+  npRowGutter.scrollTop = npInput.scrollTop;
+}
+document.getElementById('npRowView').addEventListener('click', function(){
+  var btn = this;
+  if(!npRowViewActive){
+    if(!npCsvHeaders.length || !npCsvRows.length){ flashStatus('No CSV data loaded'); return; }
+    var prefix = npInput.value.length ? (/\n$/.test(npInput.value) ? npInput.value : npInput.value + '\n') : '';
+    var startLine = prefix ? (prefix.split('\n').length - 1) : 0;
+    npInput.value = prefix + buildRowViewText();
+    npRowViewMeta = { startLine: startLine, rowCount: npCsvRows.length, colsPerRow: npCsvHeaders.length };
+    npRowViewActive = true;
+    btn.setAttribute('aria-pressed', 'true');
+  } else {
+    var lines = npInput.value.split('\n');
+    var totalBlockLines = npRowViewMeta.rowCount * npRowViewMeta.colsPerRow;
+    lines.splice(npRowViewMeta.startLine, totalBlockLines);
+    npInput.value = lines.join('\n');
+    npRowViewActive = false;
+    npRowViewMeta = null;
+    btn.setAttribute('aria-pressed', 'false');
+  }
+  renderNotepad();
+  npScheduleSave();
+});
+
 npCsvFile.addEventListener('change', function(){
   var file = npCsvFile.files && npCsvFile.files[0];
   if(!file){ return; }
@@ -1813,6 +1892,7 @@ npInput.addEventListener('input', function(e){
 });
 npInput.addEventListener('scroll', function(){
   npOverlay.scrollTop = npInput.scrollTop; npOverlay.scrollLeft = npInput.scrollLeft; npGutter.scrollTop = npInput.scrollTop;
+  npRowGutter.scrollTop = npInput.scrollTop;
   if(npSuggestState.active){ positionSuggestDropdown(); }
 });
 
