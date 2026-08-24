@@ -1081,7 +1081,7 @@ function evaluateNotepad(text){
         var envTemp = Object.assign({}, NP_BUILTINS, scope);
         var argN = Object.keys(envTemp);
         var argV = argN.map(function(k){ return envTemp[k]; });
-        var cleanValSub = valSubExpr.replace(/\bQ(\d+)\b/gi, function(m, n){
+        var cleanValSub = valSubExpr.replace(/\bL(\d+)\b/gi, function(m, n){
           var rIdx = parseInt(n, 10) - 1;
           return (rIdx >= 0 && rIdx < idx && lineValues[rIdx] !== undefined) ? '(' + lineValues[rIdx] + ')' : '0';
         });
@@ -1109,7 +1109,7 @@ function evaluateNotepad(text){
     }
 
     // Resolve Range formulas over earlier lines. A line inside a range (or a
-    // bare Q# reference) that's out of bounds, not yet computed, or holds no
+    // bare L# reference) that's out of bounds, not yet computed, or holds no
     // numeric value (blank line, text-only line, etc) counts as 0 rather than
     // voiding the whole formula.
     function rangeValues(a, b){
@@ -1121,7 +1121,7 @@ function evaluateNotepad(text){
       }
       return vals;
     }
-    var withFuncRanges = exprText.replace(/\b(sum|avg|average|min|max|count)\s*\(\s*Q(\d+)\s*(?:to|:)\s*Q(\d+)\s*\)/gi, function(m, fn, a, b){
+    var withFuncRanges = exprText.replace(/\b(sum|avg|average|min|max|count)\s*\(\s*L(\d+)\s*(?:to|:)\s*L(\d+)\s*\)/gi, function(m, fn, a, b){
       var vals = rangeValues(a, b);
       var lower = fn.toLowerCase();
       if(lower === 'sum'){ return '(' + vals.join('+') + ')'; }
@@ -1132,12 +1132,12 @@ function evaluateNotepad(text){
       return '0';
     });
 
-    var withBareRanges = withFuncRanges.replace(/\bQ(\d+)\s*(?:to|:)\s*Q(\d+)\b/gi, function(m, a, b){
+    var withBareRanges = withFuncRanges.replace(/\bL(\d+)\s*(?:to|:)\s*L(\d+)\b/gi, function(m, a, b){
       var vals = rangeValues(a, b);
       return '(' + vals.join('+') + ')';
     });
 
-    var withLineRefs = withBareRanges.replace(/\bQ(\d+)\b/gi, function(match, numStr){
+    var withLineRefs = withBareRanges.replace(/\bL(\d+)\b/gi, function(match, numStr){
       var refIdx = parseInt(numStr, 10) - 1;
       var v = (refIdx >= 0 && refIdx < idx && lineValues[refIdx] !== undefined) ? lineValues[refIdx] : 0;
       return '(' + v + ')';
@@ -2257,21 +2257,21 @@ renderReminderList();
      countdown 5m       (also: timer 1:30, countdown 1h 20m)
      remind in 10m | Stretch
      remind 2026-08-12 14:30 | Call the client
-     every 1d | Q2 = Q2 + Q1     (recurring calc, writes result back into a line)
-     at 2026-08-13 09:00 | Q2 = Q2 + Q1
-     after 1m every 1s | Q3 = Q3 + 2   (wait 1m, THEN repeat every 1s)
+     every 1d | L2 = L2 + L1     (recurring calc, writes result back into a line)
+     at 2026-08-13 09:00 | L2 = L2 + L1
+     after 1m every 1s | L3 = L3 + 2   (wait 1m, THEN repeat every 1s)
 
    Schedules for these in-line timers now persist across reloads/tabs (see
    NP_LINE_TIMER_KEY below), so an "every 1d" accumulator keeps its original
    countdown instead of resetting to "1 day from now" every time the page loads.
 
    The part after "|" accepts any expression the normal engine supports
-   (any number of Q# refs, sum/avg/min/max/count over a range, vars, units,
+   (any number of L# refs, sum/avg/min/max/count over a range, vars, units,
    dates, etc), and those refs can point to ANY line -- above or below the
    timer line itself. Chain several outputs in one timer by separating
    statements with ";":
-     every 1d | Q6 = Q1 + Q2 + Q3 + Q4 + Q5
-     every 1d | Q7 = sum(Q1 to Q5); Q8 = avg(Q1 to Q5); Q2 = Q2 + Q7
+     every 1d | L6 = L1 + L2 + L3 + L4 + L5
+     every 1d | L7 = sum(L1 to L5); L8 = avg(L1 to L5); L2 = L2 + L7
 */
 var NP_LINE_TIMER_KEY = 'notepad-calculator-fullpage-linetimers-v1';
 var npLineTimers = {};
@@ -2342,7 +2342,7 @@ function parseLineTimer(rawLine, index){
   // dormant -- just like "manual" -- and only arms itself once CONDITION
   // evaluates truthy. CONDITION is any expression the normal engine supports,
   // so it can read another timer's output via the line it writes to (e.g.
-  // "when Q5 >= 100"), or a calendar/date comparison (e.g. "when today >=
+  // "when L5 >= 100"), or a calendar/date comparison (e.g. "when today >=
   // 2026-09-01"), or both combined with && / ||. Implies "manual" automatically.
   var whenExpr = '';
   var whenMatch = line.match(/\s+when\s+(.+?)\s*(?=\|)/i);
@@ -2388,7 +2388,7 @@ function parseLineTimer(rawLine, index){
     if(!when || isNaN(when)){ return null; }
   } else if((match = line.match(/^after\s+(.+?)\s+every\s+(.+?)\s*\|\s*(.+)$/i))){
     // Compound form: wait an initial delay, then repeat on a (usually shorter)
-    // interval after that -- e.g. "after 1m every 1s | Q3=Q3+2".
+    // interval after that -- e.g. "after 1m every 1s | L3=L3+2".
     type = 'calc';
     var initialDelay = parseScheduleDuration(match[1].trim());
     var everyDuration = parseScheduleDuration(match[2].trim());
@@ -2503,12 +2503,12 @@ function handleLineTimerAction(action, key){
 function runTimerExprStatements(exprText){
   // Shared by scheduled calc timers (every/at/after...every) and countdown
   // completion expressions. The expression can hold ANY formula, referencing
-  // ANY number of lines in ANY position -- e.g. sum(Q1 to Q9), or
-  // "Q2+Q4+Q7+sqrt(Q9)". Multiple outputs are supported by separating
-  // statements with ";" -- e.g.  Q2 = Q2 + Q1; Q6 = avg(Q1 to Q5)
+  // ANY number of lines in ANY position -- e.g. sum(L1 to L9), or
+  // "L2+L4+L7+sqrt(L9)". Multiple outputs are supported by separating
+  // statements with ";" -- e.g.  L2 = L2 + L1; L6 = avg(L1 to L5)
   // Each statement is evaluated by appending it as a scratch line AFTER the
   // whole current buffer (so it can see every line, regardless of where the
-  // timer line itself sits), then -- if it has a "Qdest = " prefix -- its
+  // timer line itself sits), then -- if it has a "Ldest = " prefix -- its
   // result is written back into that destination line before the next
   // statement runs, so later statements can chain off earlier ones.
   var statements = exprText.split(/;+/).map(function(s){ return s.trim(); }).filter(Boolean);
@@ -2516,7 +2516,7 @@ function runTimerExprStatements(exprText){
   var currentText = npInput.value.split('\n');
   var summaryParts = [];
   statements.forEach(function(stmt){
-    var destination = stmt.match(/^Q(\d+)\s*=\s*(.+)$/i);
+    var destination = stmt.match(/^L(\d+)\s*=\s*(.+)$/i);
     var expression = destination ? destination[2] : stmt;
     var scratch = currentText.slice();
     scratch.push(expression);
@@ -2527,9 +2527,9 @@ function runTimerExprStatements(exprText){
       var destinationIndex = parseInt(destination[1], 10) - 1;
       if(destinationIndex >= 0 && destinationIndex < currentText.length && value !== ''){
         currentText[destinationIndex] = value;
-        summaryParts.push('Q' + destination[1] + ' = ' + value);
+        summaryParts.push('L' + destination[1] + ' = ' + value);
       } else {
-        summaryParts.push('Cannot write to Q' + destination[1] + ' (only ' + currentText.length + ' lines exist)');
+        summaryParts.push('Cannot write to L' + destination[1] + ' (only ' + currentText.length + ' lines exist)');
       }
     } else {
       summaryParts.push(value !== '' ? value : 'No result');
@@ -2556,7 +2556,7 @@ function runScheduledCalculation(state, key){
 }
 function evaluateConditionExpr(exprText){
   // Read-only truthy check for a "when" gate condition -- reuses the full
-  // expression engine (comparisons, if/then/else, date logic, Q# refs to
+  // expression engine (comparisons, if/then/else, date logic, L# refs to
   // whatever line another timer's output was written to) but never writes
   // anything back, unlike runTimerExprStatements.
   var scratch = npInput.value.split('\n');
