@@ -612,12 +612,12 @@ function applyCsvRecordToText(record){
   var lines = npInput.value.split('\n');
   var changed = false;
   var newLines = lines.map(function(line, i){
-    var m = line.match(/^(\s*)([A-Za-z_][A-Za-z0-9_]*)(\s*)=(\s*)(.*)$/);
+    var m = line.match(/^(\s*)(@?)([A-Za-z_][A-Za-z0-9_]*)(\s*)=(\s*)(.*)$/);
     if(m){
-      var varName = m[2];
+      var varName = m[3];
       var col = npLineLinks['var:' + varName];
       if(col && Object.prototype.hasOwnProperty.call(record, col)){
-        var rebuilt = m[1] + varName + m[3] + '=' + m[4] + record[col];
+        var rebuilt = m[1] + m[2] + varName + m[4] + '=' + m[5] + record[col];
         if(rebuilt !== line){ changed = true; }
         return rebuilt;
       }
@@ -1004,17 +1004,19 @@ function evaluateNotepad(text){
   var lines = text.split('\n');
   var scope = {};
   var dateScope = {};
+  var constDeclaredAt = {};
   var lineValues = [];
   var results = [];
   lines.forEach(function(rawLine, idx){
     var trimmed = rawLine.trim();
     if(!trimmed){ results.push(''); lineValues.push(undefined); return; }
     var work = trimmed.replace(/=+\s*$/, '').trim();
-    var assignMatch = work.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.+)$/);
-    var exprText, varName = null, selfUpdateName = null;
+    var assignMatch = work.match(/^(@)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.+)$/);
+    var exprText, varName = null, selfUpdateName = null, isConstDecl = false;
     if(assignMatch){
-      varName = assignMatch[1];
-      exprText = assignMatch[2];
+      isConstDecl = !!assignMatch[1];
+      varName = assignMatch[2];
+      exprText = assignMatch[3];
     } else {
       exprText = work;
       var compoundMatch = work.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*([+\-*/])=\s*(.+)$/);
@@ -1023,9 +1025,27 @@ function evaluateNotepad(text){
         exprText = selfUpdateName + compoundMatch[2] + '(' + compoundMatch[3] + ')';
       } else {
         var selfMatch = work.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*[+\-*/]/);
-        if(selfMatch && Object.prototype.hasOwnProperty.call(scope, selfMatch[1])){
+        if(selfMatch && Object.prototype.hasOwnProperty.call(scope, selfMatch[1]) && !Object.prototype.hasOwnProperty.call(constDeclaredAt, selfMatch[1])){
           selfUpdateName = selfMatch[1];
         }
+      }
+    }
+
+    // "@name = expr" declares name as a constant: any later EXPLICIT write to
+    // that name -- "name = ...", "@name = ...", or "name += ..." -- is
+    // blocked instead of silently overwriting it. A bare reference with no
+    // "=" at all (e.g. just "name*5" on its own line) is always read-only
+    // and is never blocked, constant or not -- see the selfMatch guard above,
+    // which skips the implicit self-update shortcut entirely for constants.
+    var targetName = varName || selfUpdateName;
+    if(targetName){
+      if(Object.prototype.hasOwnProperty.call(constDeclaredAt, targetName)){
+        results.push('= \u26A0 "' + targetName + '" is constant (set on line ' + (constDeclaredAt[targetName] + 1) + ')');
+        lineValues.push(undefined);
+        return;
+      }
+      if(isConstDecl){
+        constDeclaredAt[targetName] = idx;
       }
     }
 
@@ -1240,7 +1260,7 @@ function renderNotepad(){
 
     var linkChip = '';
     if(npCsvHeaders.length && trimmedLine){
-      var lineMatch = rawLine.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=/);
+      var lineMatch = rawLine.match(/^\s*@?([A-Za-z_][A-Za-z0-9_]*)\s*=/);
       var linkKey = lineMatch ? ('var:' + lineMatch[1]) : ('line:' + i);
       var linkedCol = npLineLinks[linkKey];
       var chipClass = linkedCol ? 'ov-link-chip linked' : 'ov-link-chip';
@@ -1623,7 +1643,7 @@ document.getElementById('npCsvFromText').addEventListener('click', function(){
 
   var existingVarNames = [];
   npInput.value.split('\n').forEach(function(line){
-    var m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=/);
+    var m = line.match(/^\s*@?([A-Za-z_][A-Za-z0-9_]*)\s*=/);
     if(m){ existingVarNames.push(m[1]); }
   });
   npCsvHeaders.forEach(function(col){
@@ -1722,7 +1742,7 @@ npCsvFile.addEventListener('change', function(){
 
     var existingVarNames = [];
     npInput.value.split('\n').forEach(function(line){
-      var m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=/);
+      var m = line.match(/^\s*@?([A-Za-z_][A-Za-z0-9_]*)\s*=/);
       if(m){ existingVarNames.push(m[1]); }
     });
     npCsvHeaders.forEach(function(col){
