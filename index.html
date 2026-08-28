@@ -1221,6 +1221,8 @@ function renderNotepad(){
   npKnownVars = Object.keys(evalOut.scope);
   var tsChanged = false;
   var nextTimestamps = [];
+  var prevTimestamps = npLineTimestamps;
+  var usedPrevIdx = {};
   npLineTimerSeenKeys = {};
   var runningOffset = 0;
   var html = lines.map(function(rawLine, i){
@@ -1240,13 +1242,35 @@ function renderNotepad(){
     var trimmedLine = rawLine.trim();
     var tsSpan = '';
     if(trimmedLine){
-      var existing = npLineTimestamps[i];
+      var existing = prevTimestamps[i];
       var entry;
-      if(existing && existing.text === trimmedLine){
+      if(existing && existing.text === trimmedLine && !usedPrevIdx[i]){
+        // Fast path: this line hasn't moved -- same text, same position.
         entry = existing;
+        usedPrevIdx[i] = true;
       } else {
-        entry = { text: trimmedLine, ts: formatNpTimestamp(new Date()) };
-        tsChanged = true;
+        // The line's own position didn't match (likely shifted because a
+        // line was added/removed above it). Before stamping it as "new",
+        // search the PREVIOUS timestamp list for this exact text elsewhere
+        // (not already claimed by another line this pass), preferring the
+        // closest original position. If found, that line simply moved --
+        // carry its original timestamp forward instead of resetting it.
+        var bestIdx = -1, bestDist = Infinity;
+        for(var j = 0; j < prevTimestamps.length; j++){
+          if(usedPrevIdx[j]){ continue; }
+          var cand = prevTimestamps[j];
+          if(cand && cand.text === trimmedLine){
+            var dist = Math.abs(j - i);
+            if(dist < bestDist){ bestDist = dist; bestIdx = j; }
+          }
+        }
+        if(bestIdx !== -1){
+          entry = prevTimestamps[bestIdx];
+          usedPrevIdx[bestIdx] = true;
+        } else {
+          entry = { text: trimmedLine, ts: formatNpTimestamp(new Date()) };
+          tsChanged = true;
+        }
       }
       nextTimestamps[i] = entry;
       var isSettled = npLastFinalizedText[i] === trimmedLine;
