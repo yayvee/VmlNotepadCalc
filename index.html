@@ -1002,6 +1002,75 @@ function substituteDateComponents(exprText, dateScope){
 
 function evaluateNotepad(text){
   var lines = text.split('\n');
+  var n = lines.length;
+
+  // ---- Dependency graph: which line numbers (0-based) does each line's raw
+  // text mention via L#, including ranges like "sum(L1 to L9)" or "L2 to L5"?
+  // This is a plain text scan -- cheap, and it's only used to find genuine
+  // circular chains (L1 depends on L2 depends on L1) before we run the real
+  // evaluator, so any line can reference any other line, above or below it.
+  function addRange(refs, a, b){
+    var s = parseInt(a, 10) - 1, e = parseInt(b, 10) - 1;
+    if(s > e){ var t = s; s = e; e = t; }
+    for(var i = s; i <= e; i++){ refs[i] = true; }
+  }
+  var deps = lines.map(function(rawLine){
+    var refs = {};
+    rawLine.replace(/\b(?:sum|avg|average|min|max|count)\s*\(\s*L(\d+)\s*(?:to|:)\s*L(\d+)\s*\)/gi, function(m, a, b){ addRange(refs, a, b); return m; });
+    rawLine.replace(/\bL(\d+)\s*(?:to|:)\s*L(\d+)\b/gi, function(m, a, b){ addRange(refs, a, b); return m; });
+    rawLine.replace(/\bL(\d+)\b/gi, function(m, d){ refs[parseInt(d, 10) - 1] = true; return m; });
+    return Object.keys(refs).map(Number);
+  });
+
+  // ---- Tarjan's SCC to find genuine cycles (incl. self-references) ----
+  var tIndex = new Array(n).fill(-1), tLow = new Array(n).fill(0), onStack = new Array(n).fill(false);
+  var tStack = [], counter = 0, sccOfLine = {};
+  function strongconnect(v){
+    tIndex[v] = counter; tLow[v] = counter; counter++;
+    tStack.push(v); onStack[v] = true;
+    (deps[v] || []).forEach(function(w){
+      if(w < 0 || w >= n){ return; }
+      if(tIndex[w] === -1){ strongconnect(w); tLow[v] = Math.min(tLow[v], tLow[w]); }
+      else if(onStack[w]){ tLow[v] = Math.min(tLow[v], tIndex[w]); }
+    });
+    if(tLow[v] === tIndex[v]){
+      var comp = [], w;
+      do{ w = tStack.pop(); onStack[w] = false; comp.push(w); } while(w !== v);
+      if(comp.length > 1 || (deps[comp[0]] || []).indexOf(comp[0]) !== -1){
+        comp.forEach(function(i){ sccOfLine[i] = comp; });
+      }
+    }
+  }
+  for(var v0 = 0; v0 < n; v0++){ if(tIndex[v0] === -1){ strongconnect(v0); } }
+  var cyclic = sccOfLine; // index -> array of line indices in its cycle
+
+  // Anything that (directly or transitively) depends on a cyclic line can
+  // never resolve either -- flag those too instead of silently using 0.
+  var blocked = {};
+  var taintChanged = true;
+  while(taintChanged){
+    taintChanged = false;
+    for(var bi = 0; bi < n; bi++){
+      if(cyclic[bi] || blocked[bi]){ continue; }
+      var bd = deps[bi] || [];
+      for(var bk = 0; bk < bd.length; bk++){
+        if(cyclic[bd[bk]] || blocked[bd[bk]]){ blocked[bi] = true; taintChanged = true; break; }
+      }
+    }
+  }
+
+  // ---- Evaluate the whole document, but do it in multiple passes so a
+  // reference to a line below the current one can resolve once that later
+  // line has been computed (Gauss-Seidel style: each pass uses the freshest
+  // value available -- this pass's own earlier lines, or last pass's later
+  // ones). Non-cyclic lines form a DAG, so this always settles within n
+  // passes; we cap it a little higher just as a safety margin.
+  function sameLineValues(a, b){
+    if(a.length !== b.length){ return false; }
+    for(var i = 0; i < a.length; i++){ if(a[i] !== b[i]){ return false; } }
+    return true;
+  }
+  function runPass(prevLineValues){
   var scope = {};
   var dateScope = {};
   var constDeclaredAt = {};
@@ -1010,6 +1079,26 @@ function evaluateNotepad(text){
   lines.forEach(function(rawLine, idx){
     var trimmed = rawLine.trim();
     if(!trimmed){ results.push(''); lineValues.push(undefined); return; }
+    if(cyclic[idx]){
+      var cycleNums = cyclic[idx].slice().sort(function(a,b){return a-b;}).map(function(i){ return i + 1; });
+      results.push('= \u26A0 circular reference (L' + cycleNums.join(' \u2192 L') + ')');
+      lineValues.push(undefined);
+      return;
+    }
+    if(blocked[idx]){
+      results.push('= \u26A0 blocked: depends on a line with a circular reference');
+      lineValues.push(undefined);
+      return;
+    }
+    // Resolves an L# reference (0-based refIdx) to a number. Lines above the
+    // current one use the value already computed THIS pass; lines at or
+    // below use the value from the PREVIOUS full pass (0 on the first pass,
+    // until it has had a chance to be computed at least once).
+    function getRef(refIdx){
+      if(refIdx < 0 || refIdx >= n){ return 0; }
+      if(refIdx < idx){ return (lineValues[refIdx] !== undefined) ? lineValues[refIdx] : 0; }
+      return (prevLineValues && prevLineValues[refIdx] !== undefined) ? prevLineValues[refIdx] : 0;
+    }
     var work = trimmed.replace(/=+\s*$/, '').trim();
     var assignMatch = work.match(/^(@)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.+)$/);
     var exprText, varName = null, selfUpdateName = null, isConstDecl = false;
@@ -1102,8 +1191,7 @@ function evaluateNotepad(text){
         var argN = Object.keys(envTemp);
         var argV = argN.map(function(k){ return envTemp[k]; });
         var cleanValSub = valSubExpr.replace(/\bL(\d+)\b/gi, function(m, n){
-          var rIdx = parseInt(n, 10) - 1;
-          return (rIdx >= 0 && rIdx < idx && lineValues[rIdx] !== undefined) ? '(' + lineValues[rIdx] + ')' : '0';
+          return '(' + getRef(parseInt(n, 10) - 1) + ')';
         });
         var fnVal = new Function(argN.join(','), 'return (' + cleanValSub.replace(/\^/g, '**') + ');');
         evalVal = fnVal.apply(null, argV);
@@ -1136,9 +1224,7 @@ function evaluateNotepad(text){
       var s = parseInt(a, 10) - 1, en = parseInt(b, 10) - 1;
       if(s > en){ var t = s; s = en; en = t; }
       var vals = [];
-      for(var i = s; i <= en; i++){
-        vals.push((i >= 0 && i < idx && lineValues[i] !== undefined) ? lineValues[i] : 0);
-      }
+      for(var i = s; i <= en; i++){ vals.push(getRef(i)); }
       return vals;
     }
     var withFuncRanges = exprText.replace(/\b(sum|avg|average|min|max|count)\s*\(\s*L(\d+)\s*(?:to|:)\s*L(\d+)\s*\)/gi, function(m, fn, a, b){
@@ -1158,9 +1244,7 @@ function evaluateNotepad(text){
     });
 
     var withLineRefs = withBareRanges.replace(/\bL(\d+)\b/gi, function(match, numStr){
-      var refIdx = parseInt(numStr, 10) - 1;
-      var v = (refIdx >= 0 && refIdx < idx && lineValues[refIdx] !== undefined) ? lineValues[refIdx] : 0;
-      return '(' + v + ')';
+      return '(' + getRef(parseInt(numStr, 10) - 1) + ')';
     });
 
     try{
@@ -1186,7 +1270,18 @@ function evaluateNotepad(text){
       results.push(''); lineValues.push(undefined);
     }
   });
-  return { results: results, scope: scope };
+  return { results: results, lineValues: lineValues, scope: scope };
+  }
+
+  var maxPasses = n + 3;
+  var prevLineValues = null;
+  var pass = runPass(prevLineValues);
+  for(var p = 1; p < maxPasses; p++){
+    if(prevLineValues && sameLineValues(prevLineValues, pass.lineValues)){ break; }
+    prevLineValues = pass.lineValues;
+    pass = runPass(prevLineValues);
+  }
+  return { results: pass.results, scope: pass.scope };
 }
 
 function escapeHtml(s){
