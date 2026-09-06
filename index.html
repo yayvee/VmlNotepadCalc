@@ -1014,11 +1014,15 @@ function evaluateNotepad(text){
     if(s > e){ var t = s; s = e; e = t; }
     for(var i = s; i <= e; i++){ refs[i] = true; }
   }
-  var deps = lines.map(function(rawLine){
+  var deps = lines.map(function(rawLine, i){
     var refs = {};
     rawLine.replace(/\b(?:sum|avg|average|min|max|count)\s*\(\s*L(\d+)\s*(?:to|:)\s*L(\d+)\s*\)/gi, function(m, a, b){ addRange(refs, a, b); return m; });
     rawLine.replace(/\bL(\d+)\s*(?:to|:)\s*L(\d+)\b/gi, function(m, a, b){ addRange(refs, a, b); return m; });
     rawLine.replace(/\bL(\d+)\b/gi, function(m, d){ refs[parseInt(d, 10) - 1] = true; return m; });
+    // A line starting with an operator (+, -, *, /) implicitly continues from
+    // the line right above it, adding-machine-tape style -- record that as a
+    // dependency too so cycle/blocked detection stays consistent with it.
+    if(i > 0 && /^\s*[+\-*/]/.test(rawLine)){ refs[i - 1] = true; }
     return Object.keys(refs).map(Number);
   });
 
@@ -1116,6 +1120,17 @@ function evaluateNotepad(text){
         var selfMatch = work.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*[+\-*/]/);
         if(selfMatch && Object.prototype.hasOwnProperty.call(scope, selfMatch[1]) && !Object.prototype.hasOwnProperty.call(constDeclaredAt, selfMatch[1])){
           selfUpdateName = selfMatch[1];
+        } else {
+          // A line that starts with a bare operator continues from the line
+          // right above it -- adding-machine-tape style. "45" then "+52" on
+          // the next line shows "+52 = 97" without needing to repeat "45".
+          // Chains naturally: each such line's own result becomes the base
+          // for the next one, since getRef always returns the freshest value.
+          var leadingOpMatch = work.match(/^([+\-*/])\s*(.+)$/);
+          if(leadingOpMatch){
+            var prevVal = getRef(idx - 1);
+            exprText = '(' + prevVal + ')' + leadingOpMatch[1] + '(' + leadingOpMatch[2] + ')';
+          }
         }
       }
     }
