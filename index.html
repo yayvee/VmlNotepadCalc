@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<!-- saved from url=(0040)https://yayvee.github.io/VmlNotepadCalc/ -->
+<html lang="en" style="--np-font-size: 20px; --np-line-height: 37px; --np-ts-alpha-main: 0.000; --np-ts-alpha-glow1: 0.000; --np-ts-alpha-glow2: 0.000;"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Notepad Calculator</title>
-<meta name="theme-color" content="#3C3489" />
+<meta name="theme-color" content="#3C3489">
 <style>
   :root{
     --bg: #F7F7F5;
@@ -328,15 +328,15 @@
     <button id="npFontUp" aria-label="Increase font size">A+</button>
     <div class="np-ts-bright-group" title="Timestamp brightness">
       <button id="npTsBrightDown" aria-label="Decrease timestamp brightness">-</button>
-      <input type="number" id="npTsBrightValue" min="0" max="100" step="5" aria-label="Timestamp brightness percent" />
+      <input type="number" id="npTsBrightValue" min="0" max="100" step="5" aria-label="Timestamp brightness percent">
       <span class="np-ts-bright-suffix">%</span>
       <button id="npTsBrightUp" aria-label="Increase timestamp brightness">+</button>
     </div>
     <button id="npExport">Export</button>
     <button id="npImportBtn">Import</button>
-    <input type="file" id="npImportFile" accept=".txt,text/plain" style="display:none;" />
+    <input type="file" id="npImportFile" accept=".txt,text/plain" style="display:none;">
     <button id="npCsvBtn">Import CSV</button>
-    <input type="file" id="npCsvFile" accept=".csv,text/csv" style="display:none;" />
+    <input type="file" id="npCsvFile" accept=".csv,text/csv" style="display:none;">
     <button id="npCsvFromText" title="Type or paste CSV-style rows (e.g. Product,Price) directly in the notepad, select them, then click this — no separate file needed">CSV from Text</button>
     <button id="npCsvExport" title="Save the currently loaded CSV data (however it was loaded/edited) as a downloadable .csv file">Export CSV</button>
     <button id="npRowView" title="Toggle between single-record view and all CSV rows expanded in the notepad, grouped with row/column labels" aria-pressed="false">Row View</button>
@@ -345,33 +345,33 @@
     <button id="npClear">Clear</button>
   </div>
   <div class="status-row" id="npFindBar" style="display:none;">
-    <input type="text" id="npFindInput" placeholder="Find" aria-label="Find text" />
-    <button id="npFindPrev" aria-label="Previous match">&#8593;</button>
-    <button id="npFindNext" aria-label="Next match">&#8595;</button>
+    <input type="text" id="npFindInput" placeholder="Find" aria-label="Find text">
+    <button id="npFindPrev" aria-label="Previous match">↑</button>
+    <button id="npFindNext" aria-label="Next match">↓</button>
     <span id="npFindCount"></span>
     <button id="npFindCase" title="Toggle case-sensitive match" aria-pressed="false">Aa</button>
     <button id="npFindReplaceToggle" title="Show/hide replace">Replace</button>
-    <button id="npFindClose" aria-label="Close find bar">&times;</button>
+    <button id="npFindClose" aria-label="Close find bar">×</button>
   </div>
   <div class="status-row" id="npReplaceRow" style="display:none;">
-    <input type="text" id="npReplaceInput" placeholder="Replace with" aria-label="Replace with" />
+    <input type="text" id="npReplaceInput" placeholder="Replace with" aria-label="Replace with">
     <button id="npReplaceOne">Replace</button>
     <button id="npReplaceAll">Replace All</button>
   </div>
   <div class="status-row" id="npCsvNav" style="display:none;">
-    <button id="npCsvPrev" aria-label="Previous record">&#8592;</button>
+    <button id="npCsvPrev" aria-label="Previous record">←</button>
     <select id="npCsvSelect"></select>
-    <button id="npCsvNext" aria-label="Next record">&#8594;</button>
+    <button id="npCsvNext" aria-label="Next record">→</button>
     <span id="npCsvCount"></span>
     <button id="npCsvResetLinks" title="Unlink every line from its CSV column">Reset Links</button>
   </div>
 </header>
 <main>
   <div id="npRowGutter"></div>
-  <div id="npGutter"></div>
+  <div id="npGutter"><div>1</div></div>
   <div id="npInputWrap">
     <textarea id="npInput" spellcheck="true" wrap="off"></textarea>
-    <div id="npOverlay" aria-hidden="true"></div>
+    <div id="npOverlay" aria-hidden="true"><div class="ov-line"><span class="ov-ghost"> </span><span class="ov-result"></span></div></div>
   </div>
 </main>
 <div id="npSuggest"></div>
@@ -379,7 +379,7 @@
 <div id="npTimerPanel" class="np-timer-panel" style="display:none;">
   <div class="np-timer-header">
     <span class="np-timer-title">Timer</span>
-    <button id="npTimerClose" aria-label="Close timer panel">&times;</button>
+    <button id="npTimerClose" aria-label="Close timer panel">×</button>
   </div>
 
   <div class="np-timer-tabs">
@@ -401,9 +401,9 @@
   <div class="np-timer-section" id="npCdSection">
     <div class="np-timer-display" id="npCdDisplay">00:00:00</div>
     <div class="np-timer-setrow" id="npCdSetRow">
-      <div class="np-timer-field"><label>H</label><input type="number" id="npCdH" min="0" max="99" value="0" /></div>
-      <div class="np-timer-field"><label>M</label><input type="number" id="npCdM" min="0" max="59" value="5" /></div>
-      <div class="np-timer-field"><label>S</label><input type="number" id="npCdS" min="0" max="59" value="0" /></div>
+      <div class="np-timer-field"><label>H</label><input type="number" id="npCdH" min="0" max="99" value="0"></div>
+      <div class="np-timer-field"><label>M</label><input type="number" id="npCdM" min="0" max="59" value="5"></div>
+      <div class="np-timer-field"><label>S</label><input type="number" id="npCdS" min="0" max="59" value="0"></div>
     </div>
     <div class="np-timer-btnrow">
       <button id="npCdStartPause">Start</button>
@@ -416,11 +416,11 @@
     <p class="np-timer-hint">Set a time, add a short note, and this tab will alert you when it's due (while this page stays open in your browser).</p>
     <div class="np-timer-field np-timer-field-wide">
       <label>When</label>
-      <input type="datetime-local" id="npRemWhen" />
+      <input type="datetime-local" id="npRemWhen">
     </div>
     <div class="np-timer-field np-timer-field-wide">
       <label>Note</label>
-      <input type="text" id="npRemNote" placeholder="e.g. Call the client" maxlength="80" />
+      <input type="text" id="npRemNote" placeholder="e.g. Call the client" maxlength="80">
     </div>
     <div class="np-timer-quickrow">
       <button data-remin="5">+5m</button>
@@ -429,7 +429,7 @@
       <button data-remin="60">+1h</button>
     </div>
     <button id="npRemAdd" class="np-timer-addbtn">Add reminder</button>
-    <div id="npRemList" class="np-timer-remlist"></div>
+    <div id="npRemList" class="np-timer-remlist"><p class="np-timer-hint" style="margin:0;">No reminders set.</p></div>
   </div>
 </div>
 
@@ -2754,5 +2754,6 @@ npLineTimerTick = setInterval(tickLineTimers, 100);
 
 renderNotepad();
 </script>
-</body>
-</html>
+
+
+</body></html>
