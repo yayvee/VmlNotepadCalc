@@ -15,6 +15,10 @@
     --text-secondary: #5F5E5A;
     --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --accent: #3C3489;
+    --danger: #D64545;
+    --row-guide: #01558A;
+    --ts-color-rgb: 0, 229, 255;
   }
   @media (prefers-color-scheme: dark){
     :root{
@@ -39,34 +43,14 @@
   }
   h1{ font-size: 18px; font-weight: 700; margin: 0; }
   .top-row{ flex: 1; min-width: 0; }
-  #npClear, #npExport, #npImportBtn, #npCsvBtn, #npCsvFromText, #npCsvExport, #npRowView, #npFontDown, #npFontUp, #npFind{
+  #npClear, #npExport, #npImportBtn, #npCsvBtn, #npCsvFromText, #npCsvExport, #npRowView, #npFind, #npSettingsBtn{
     height: 34px; padding: 0 14px; font-size: 13px; font-weight: 700; font-family: var(--font);
     border-radius: 8px; border: 1px solid var(--border); background: var(--card); color: var(--text-primary);
     cursor: pointer; flex-shrink: 0; margin-left: 8px;
   }
-  #npFontDown, #npFontUp{ padding: 0 10px; }
-  #npClear:active, #npExport:active, #npImportBtn:active, #npCsvBtn:active, #npCsvFromText:active, #npCsvExport:active, #npRowView:active, #npFontDown:active, #npFontUp:active, #npFind:active{ transform: scale(0.97); }
-  #npRowView[aria-pressed="true"]{ background: #01558A; border-color: #01558A; color: #fff; }
-  .np-ts-bright-group{
-    display: flex; align-items: center; gap: 0; margin-left: 8px; flex-shrink: 0;
-    border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
-  }
-  .np-ts-bright-group button{
-    height: 34px; width: 28px; padding: 0; font-size: 14px; font-weight: 700; font-family: var(--font);
-    border: none; background: var(--card); color: var(--text-primary); cursor: pointer;
-  }
-  .np-ts-bright-group button:active{ background: var(--surface-1); }
-  .np-ts-bright-group button:first-child{ border-right: 1px solid var(--border); }
-  .np-ts-bright-group button:last-child{ border-left: 1px solid var(--border); }
-  #npTsBrightValue{
-    height: 34px; width: 46px; border: none; background: var(--card); color: var(--text-primary);
-    font-size: 12px; font-weight: 700; font-family: var(--font); text-align: center;
-    -moz-appearance: textfield;
-  }
-  #npTsBrightValue::-webkit-inner-spin-button, #npTsBrightValue::-webkit-outer-spin-button{
-    -webkit-appearance: none; margin: 0;
-  }
-  .np-ts-bright-suffix{ font-size: 11px; color: var(--text-secondary); padding-right: 8px; background: var(--card); }
+  #npClear:active, #npExport:active, #npImportBtn:active, #npCsvBtn:active, #npCsvFromText:active, #npCsvExport:active, #npRowView:active, #npFind:active, #npSettingsBtn:active{ transform: scale(0.97); }
+  #npRowView[aria-pressed="true"]{ background: var(--row-guide, #01558A); border-color: var(--row-guide, #01558A); color: #fff; }
+  #npSettingsBtn{ font-size: 16px; padding: 0 12px; }
   #npSavedStatus{ font-size: 12px; font-weight: 700; color: var(--text-secondary); margin-right: 10px; white-space: nowrap; }
   .status-row{ display:flex; align-items:center; flex-shrink:0; }
   #npCsvNav{ margin-top: 8px; gap: 8px; }
@@ -130,13 +114,13 @@
   #npRowGutter.active{ width: 34px; }
   .np-row-bracket{
     position: absolute; left: 6px; right: 4px;
-    border-left: 3px solid #01558A; border-radius: 2px;
+    border-left: 3px solid var(--row-guide, #01558A); border-radius: 2px;
     display: flex; align-items: center; justify-content: center;
   }
   .np-row-bracket .row-label{
     writing-mode: vertical-rl; transform: rotate(180deg);
     font-family: var(--font-mono); font-size: 12px; font-weight: 700;
-    color: #01558A; white-space: nowrap; padding-left: 4px;
+    color: var(--row-guide, #01558A); white-space: nowrap; padding-left: 4px;
   }
 
   textarea, #npOverlay{
@@ -145,7 +129,7 @@
   #npInput{
     position: absolute; inset: 0; width: 100%; height: 100%;
     padding: 18px 20px; border: none;
-    background: var(--card); color: var(--text-primary); resize: none; outline: none;
+    background: var(--card); color: var(--note-text, var(--text-primary)); resize: none; outline: none;
     overflow: auto; white-space: pre;
     z-index: 1;
   }
@@ -188,8 +172,8 @@
   #npOverlay .np-line-timer button.running{ background:var(--accent, #3C3489); color:#fff; border-color:var(--accent, #3C3489); }
   #npOverlay .np-line-timer-help{ color:var(--text-secondary); font-size:11px; }
   #npOverlay .ov-timestamp{
-    color: rgba(0, 229, 255, var(--np-ts-alpha-main, 0.25));
-    text-shadow: 0 0 6px rgba(0, 229, 255, var(--np-ts-alpha-glow1, 0.16)), 0 0 12px rgba(0, 229, 255, var(--np-ts-alpha-glow2, 0.09));
+    color: rgba(var(--ts-color-rgb, 0, 229, 255), var(--np-ts-alpha-main, 0.25));
+    text-shadow: 0 0 6px rgba(var(--ts-color-rgb, 0, 229, 255), var(--np-ts-alpha-glow1, 0.16)), 0 0 12px rgba(var(--ts-color-rgb, 0, 229, 255), var(--np-ts-alpha-glow2, 0.09));
     font-weight: 700;
     pointer-events: none;
     user-select: none;
@@ -315,6 +299,61 @@
   @media (max-width: 560px){
     #npInput, #npOverlay{ padding: 18px 12px; }
   }
+
+  .np-settings-overlay{
+    position: fixed; inset: 0; z-index: 110; background: rgba(0,0,0,0.5);
+    display: flex; align-items: center; justify-content: center; padding: 16px;
+  }
+  .np-settings-box{
+    background: var(--card); border-radius: 14px; padding: 20px 22px; width: 380px; max-width: 100%;
+    max-height: 85vh; overflow-y: auto; box-shadow: 0 20px 50px rgba(0,0,0,0.35); font-family: var(--font);
+  }
+  .np-settings-head{ display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  .np-settings-title{ font-size: 16px; font-weight: 700; color: var(--text-primary); }
+  #npSettingsClose{
+    border: none; background: transparent; font-size: 20px; line-height: 1; cursor: pointer;
+    color: var(--text-secondary); padding: 0 4px;
+  }
+  .np-settings-section{ margin-bottom: 18px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+  .np-settings-section:last-of-type{ border-bottom: none; margin-bottom: 6px; }
+  .np-settings-section-title{
+    font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+    color: var(--text-secondary); margin-bottom: 10px;
+  }
+  .np-settings-row{
+    display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px;
+  }
+  .np-settings-row:last-child{ margin-bottom: 0; }
+  .np-settings-label{ font-size: 13px; color: var(--text-primary); font-weight: 600; }
+  .np-settings-control{ display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+  .np-settings-control input[type="color"]{
+    width: 34px; height: 30px; padding: 0; border: 1px solid var(--border); border-radius: 6px; cursor: pointer; background: var(--surface-1);
+  }
+  .np-settings-control select{
+    height: 30px; padding: 0 6px; font-size: 12px; font-family: var(--font); border-radius: 6px;
+    border: 1px solid var(--border); background: var(--surface-1); color: var(--text-primary); cursor: pointer;
+  }
+  .np-settings-sizebtn{
+    width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--border);
+    background: var(--surface-1); color: var(--text-primary); font-weight: 700; font-size: 13px; cursor: pointer;
+  }
+  .np-settings-sizebtn:active{ transform: scale(0.95); }
+  .np-settings-sizeval{ font-size: 12px; font-weight: 700; color: var(--text-secondary); min-width: 26px; text-align: center; }
+  .np-settings-toggle{
+    position: relative; width: 40px; height: 22px; border-radius: 11px; background: var(--border);
+    border: none; cursor: pointer; flex-shrink: 0; transition: background 0.15s ease;
+  }
+  .np-settings-toggle::after{
+    content: ""; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%;
+    background: #fff; transition: transform 0.15s ease; box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  }
+  .np-settings-toggle[aria-pressed="true"]{ background: var(--accent, #3C3489); }
+  .np-settings-toggle[aria-pressed="true"]::after{ transform: translateX(18px); }
+  .np-settings-reset{
+    width: 100%; height: 32px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--surface-1); color: var(--text-primary); font-weight: 700; font-size: 12px; cursor: pointer; margin-top: 4px;
+  }
+  .np-settings-reset:active{ transform: scale(0.98); }
 </style>
 </head>
 <body>
@@ -324,14 +363,6 @@
   </div>
   <div class="status-row">
     <span id="npSavedStatus"></span>
-    <button id="npFontDown" aria-label="Decrease font size">A-</button>
-    <button id="npFontUp" aria-label="Increase font size">A+</button>
-    <div class="np-ts-bright-group" title="Timestamp brightness">
-      <button id="npTsBrightDown" aria-label="Decrease timestamp brightness">-</button>
-      <input type="number" id="npTsBrightValue" min="0" max="100" step="5" aria-label="Timestamp brightness percent">
-      <span class="np-ts-bright-suffix">%</span>
-      <button id="npTsBrightUp" aria-label="Increase timestamp brightness">+</button>
-    </div>
     <button id="npExport">Export</button>
     <button id="npImportBtn">Import</button>
     <input type="file" id="npImportFile" accept=".txt,text/plain" style="display:none;">
@@ -342,6 +373,7 @@
     <button id="npRowView" title="Toggle between single-record view and all CSV rows expanded in the notepad, grouped with row/column labels" aria-pressed="false">Row View</button>
     <button id="npFind" title="Find text (Ctrl/Cmd+F). Add Replace with the toggle inside.">Find</button>
     <button id="npTimerBtn" style="display:none" aria-hidden="true" tabindex="-1">Timer</button>
+    <button id="npSettingsBtn" title="Settings: fonts, colors, timestamp, row view guides" aria-label="Settings">⚙</button>
     <button id="npClear">Clear</button>
   </div>
   <div class="status-row" id="npFindBar" style="display:none;">
@@ -438,6 +470,101 @@
     <div class="np-alarm-title" id="npAlarmTitle">Time's up</div>
     <div class="np-alarm-msg" id="npAlarmMsg"></div>
     <button id="npAlarmDismiss">Dismiss</button>
+  </div>
+</div>
+
+<div id="npSettingsOverlay" class="np-settings-overlay" style="display:none;">
+  <div class="np-settings-box">
+    <div class="np-settings-head">
+      <div class="np-settings-title">Settings</div>
+      <button id="npSettingsClose" aria-label="Close settings">×</button>
+    </div>
+
+    <div class="np-settings-section">
+      <div class="np-settings-section-title">Font</div>
+      <div class="np-settings-row">
+        <span class="np-settings-label">Size</span>
+        <div class="np-settings-control">
+          <button class="np-settings-sizebtn" id="npSetFontDown" aria-label="Decrease font size">A-</button>
+          <span class="np-settings-sizeval" id="npSetFontVal">16</span>
+          <button class="np-settings-sizebtn" id="npSetFontUp" aria-label="Increase font size">A+</button>
+        </div>
+      </div>
+      <div class="np-settings-row">
+        <span class="np-settings-label">Text color</span>
+        <div class="np-settings-control"><input type="color" id="npSetFontColor" aria-label="Font color"></div>
+      </div>
+      <div class="np-settings-row">
+        <span class="np-settings-label">Font family</span>
+        <div class="np-settings-control">
+          <select id="npSetFontFamily" aria-label="Font family">
+            <option value="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">System Mono</option>
+            <option value="'Courier New', Courier, monospace">Courier New</option>
+            <option value="'Consolas', monospace">Consolas</option>
+            <option value="'Roboto Mono', monospace">Roboto Mono</option>
+            <option value="'Georgia', serif">Georgia (serif)</option>
+          </select>
+        </div>
+      </div>
+      <button class="np-settings-reset" id="npSetFontReset">Reset font to default</button>
+    </div>
+
+    <div class="np-settings-section">
+      <div class="np-settings-section-title">Colors</div>
+      <div class="np-settings-row">
+        <span class="np-settings-label">Background</span>
+        <div class="np-settings-control"><input type="color" id="npSetColorBg"></div>
+      </div>
+      <div class="np-settings-row">
+        <span class="np-settings-label">Card / panels</span>
+        <div class="np-settings-control"><input type="color" id="npSetColorCard"></div>
+      </div>
+      <div class="np-settings-row">
+        <span class="np-settings-label">Borders</span>
+        <div class="np-settings-control"><input type="color" id="npSetColorBorder"></div>
+      </div>
+      <div class="np-settings-row">
+        <span class="np-settings-label">Secondary text</span>
+        <div class="np-settings-control"><input type="color" id="npSetColorTextSec"></div>
+      </div>
+      <div class="np-settings-row">
+        <span class="np-settings-label">Accent (buttons)</span>
+        <div class="np-settings-control"><input type="color" id="npSetColorAccent"></div>
+      </div>
+      <button class="np-settings-reset" id="npSetColorsReset">Reset colors to default</button>
+    </div>
+
+    <div class="np-settings-section">
+      <div class="np-settings-section-title">Timestamp</div>
+      <div class="np-settings-row">
+        <span class="np-settings-label">Show timestamps</span>
+        <div class="np-settings-control">
+          <button class="np-settings-toggle" id="npSetTsToggle" aria-pressed="true" aria-label="Toggle timestamps"></button>
+        </div>
+      </div>
+      <div class="np-settings-row">
+        <span class="np-settings-label">Timestamp color</span>
+        <div class="np-settings-control"><input type="color" id="npSetTsColor"></div>
+      </div>
+      <div class="np-settings-row">
+        <span class="np-settings-label">Brightness</span>
+        <div class="np-settings-control">
+          <button class="np-settings-sizebtn" id="npSetTsBrightDown" aria-label="Decrease timestamp brightness">-</button>
+          <span class="np-settings-sizeval" id="npSetTsBrightVal">25%</span>
+          <button class="np-settings-sizebtn" id="npSetTsBrightUp" aria-label="Increase timestamp brightness">+</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="np-settings-section">
+      <div class="np-settings-section-title">Row view</div>
+      <div class="np-settings-row">
+        <span class="np-settings-label">Guide bracket color</span>
+        <div class="np-settings-control"><input type="color" id="npSetRowGuideColor"></div>
+      </div>
+    </div>
+
+    <button class="np-settings-reset" id="npSetAllReset">Reset all settings to default</button>
   </div>
 </div>
 
@@ -1622,17 +1749,12 @@ function applyFontSize(){
   document.documentElement.style.setProperty('--np-font-size', npFontSize + 'px');
   document.documentElement.style.setProperty('--np-line-height', Math.round(npFontSize * 1.85) + 'px');
   try{ localStorage.setItem(NP_FONT_KEY, npFontSize); }catch(e){}
+  var setVal = document.getElementById('npSetFontVal');
+  if(setVal){ setVal.textContent = npFontSize; }
 }
 applyFontSize();
 
-document.getElementById('npFontUp').addEventListener('click', function(){
-  npFontSize = Math.min(32, npFontSize + 2);
-  applyFontSize();
-});
-document.getElementById('npFontDown').addEventListener('click', function(){
-  npFontSize = Math.max(12, npFontSize - 2);
-  applyFontSize();
-});
+
 
 // Timestamp brightness: 0-100%. Original design used a fixed 25% (with the
 // glow layers at 64% / 36% of that main value) -- that ratio is preserved
@@ -1645,30 +1767,155 @@ try{
   if(!isNaN(storedBright) && storedBright >= 0 && storedBright <= 100){ npTsBrightness = storedBright; }
 }catch(e){}
 
+// Show/hide timestamps entirely -- when off, alpha is forced to 0 regardless
+// of the brightness dial, and the dial value itself is preserved so turning
+// timestamps back on restores whatever brightness was set before.
+var NP_TS_ENABLED_KEY = 'notepad-calculator-fullpage-tsenabled-v1';
+var npTsEnabled = true;
+try{
+  var storedTsEnabled = localStorage.getItem(NP_TS_ENABLED_KEY);
+  if(storedTsEnabled !== null){ npTsEnabled = storedTsEnabled === '1'; }
+}catch(e){}
+
 function applyTsBrightness(){
   npTsBrightness = Math.max(0, Math.min(100, npTsBrightness));
-  var mainAlpha = npTsBrightness / 100;
+  var mainAlpha = npTsEnabled ? (npTsBrightness / 100) : 0;
   document.documentElement.style.setProperty('--np-ts-alpha-main', mainAlpha.toFixed(3));
   document.documentElement.style.setProperty('--np-ts-alpha-glow1', (mainAlpha * 0.64).toFixed(3));
   document.documentElement.style.setProperty('--np-ts-alpha-glow2', (mainAlpha * 0.36).toFixed(3));
-  document.getElementById('npTsBrightValue').value = npTsBrightness;
   try{ localStorage.setItem(NP_TS_BRIGHT_KEY, npTsBrightness); }catch(e){}
+  try{ localStorage.setItem(NP_TS_ENABLED_KEY, npTsEnabled ? '1' : '0'); }catch(e){}
+  var toggleBtn = document.getElementById('npSetTsToggle');
+  if(toggleBtn){ toggleBtn.setAttribute('aria-pressed', npTsEnabled ? 'true' : 'false'); }
+  var brightVal = document.getElementById('npSetTsBrightVal');
+  if(brightVal){ brightVal.textContent = npTsBrightness + '%'; }
 }
 applyTsBrightness();
 
-document.getElementById('npTsBrightUp').addEventListener('click', function(){
-  npTsBrightness = Math.min(100, npTsBrightness + 5);
+// ===== Settings panel: font color/family, UI colors, timestamp toggle/color,
+// row-view guide color. Each control writes straight to a CSS custom
+// property on <html> (same pattern as font size / timestamp brightness above)
+// and persists to its own localStorage key so it survives a reload.
+var NP_SET_KEYS = {
+  fontColor: 'notepad-calculator-fullpage-fontcolor-v1',
+  fontFamily: 'notepad-calculator-fullpage-fontfamily-v1',
+  colorBg: 'notepad-calculator-fullpage-color-bg-v1',
+  colorCard: 'notepad-calculator-fullpage-color-card-v1',
+  colorBorder: 'notepad-calculator-fullpage-color-border-v1',
+  colorTextSec: 'notepad-calculator-fullpage-color-textsec-v1',
+  colorAccent: 'notepad-calculator-fullpage-color-accent-v1',
+  tsColor: 'notepad-calculator-fullpage-tscolor-v1',
+  rowGuide: 'notepad-calculator-fullpage-rowguide-v1'
+};
+var NP_SET_DEFAULTS = {
+  fontColor: '',
+  fontFamily: '',
+  colorBg: '',
+  colorCard: '',
+  colorBorder: '',
+  colorTextSec: '',
+  colorAccent: '#3C3489',
+  tsColor: '#00E5FF',
+  rowGuide: '#01558A'
+};
+function npSetGet(name){
+  try{
+    var v = localStorage.getItem(NP_SET_KEYS[name]);
+    return (v === null || v === '') ? NP_SET_DEFAULTS[name] : v;
+  }catch(e){ return NP_SET_DEFAULTS[name]; }
+}
+function npSetSave(name, value){
+  try{ localStorage.setItem(NP_SET_KEYS[name], value || ''); }catch(e){}
+}
+function hexToRgbTriplet(hex){
+  var m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex || '');
+  if(!m){ return '0, 229, 255'; }
+  return parseInt(m[1],16) + ', ' + parseInt(m[2],16) + ', ' + parseInt(m[3],16);
+}
+function npApplyAllSettings(){
+  var root = document.documentElement.style;
+  var fontColor = npSetGet('fontColor');
+  var fontFamily = npSetGet('fontFamily');
+  var colorBg = npSetGet('colorBg');
+  var colorCard = npSetGet('colorCard');
+  var colorBorder = npSetGet('colorBorder');
+  var colorTextSec = npSetGet('colorTextSec');
+  var colorAccent = npSetGet('colorAccent');
+  var tsColor = npSetGet('tsColor');
+  var rowGuide = npSetGet('rowGuide');
+
+  if(fontColor){ root.setProperty('--note-text', fontColor); } else { root.removeProperty('--note-text'); }
+  if(fontFamily){ root.setProperty('--font-mono', fontFamily); } else { root.removeProperty('--font-mono'); }
+  if(colorBg){ root.setProperty('--bg', colorBg); } else { root.removeProperty('--bg'); }
+  if(colorCard){ root.setProperty('--card', colorCard); } else { root.removeProperty('--card'); }
+  if(colorBorder){ root.setProperty('--border', colorBorder); } else { root.removeProperty('--border'); }
+  if(colorTextSec){ root.setProperty('--text-secondary', colorTextSec); } else { root.removeProperty('--text-secondary'); }
+  root.setProperty('--accent', colorAccent);
+  root.setProperty('--ts-color-rgb', hexToRgbTriplet(tsColor));
+  root.setProperty('--row-guide', rowGuide);
+
+  var elFontColor = document.getElementById('npSetFontColor'); if(elFontColor){ elFontColor.value = fontColor || getComputedStyle(document.documentElement).getPropertyValue('--text-primary').trim() || '#1C1C1A'; }
+  var elFontFamily = document.getElementById('npSetFontFamily'); if(elFontFamily && fontFamily){ elFontFamily.value = fontFamily; }
+  var elBg = document.getElementById('npSetColorBg'); if(elBg){ elBg.value = colorBg || rgbToHex(getComputedStyle(document.documentElement).getPropertyValue('--bg')) || '#F7F7F5'; }
+  var elCard = document.getElementById('npSetColorCard'); if(elCard){ elCard.value = colorCard || rgbToHex(getComputedStyle(document.documentElement).getPropertyValue('--card')) || '#FFFFFF'; }
+  var elBorder = document.getElementById('npSetColorBorder'); if(elBorder){ elBorder.value = colorBorder || rgbToHex(getComputedStyle(document.documentElement).getPropertyValue('--border')) || '#E3E1D9'; }
+  var elTextSec = document.getElementById('npSetColorTextSec'); if(elTextSec){ elTextSec.value = colorTextSec || rgbToHex(getComputedStyle(document.documentElement).getPropertyValue('--text-secondary')) || '#5F5E5A'; }
+  var elAccent = document.getElementById('npSetColorAccent'); if(elAccent){ elAccent.value = colorAccent; }
+  var elTsColor = document.getElementById('npSetTsColor'); if(elTsColor){ elTsColor.value = tsColor; }
+  var elRowGuide = document.getElementById('npSetRowGuideColor'); if(elRowGuide){ elRowGuide.value = rowGuide; }
+}
+function rgbToHex(rgbStr){
+  var m = /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(rgbStr || '');
+  if(!m){ return null; }
+  function h(n){ var s = parseInt(n,10).toString(16); return s.length < 2 ? '0'+s : s; }
+  return '#' + h(m[1]) + h(m[2]) + h(m[3]);
+}
+npApplyAllSettings();
+
+document.getElementById('npSetFontDown').addEventListener('click', function(){ npFontSize = Math.max(12, npFontSize - 2); applyFontSize(); });
+document.getElementById('npSetFontUp').addEventListener('click', function(){ npFontSize = Math.min(32, npFontSize + 2); applyFontSize(); });
+document.getElementById('npSetFontColor').addEventListener('input', function(){ npSetSave('fontColor', this.value); npApplyAllSettings(); });
+document.getElementById('npSetFontFamily').addEventListener('change', function(){ npSetSave('fontFamily', this.value); npApplyAllSettings(); });
+document.getElementById('npSetFontReset').addEventListener('click', function(){
+  npFontSize = 16; applyFontSize();
+  npSetSave('fontColor', ''); npSetSave('fontFamily', ''); npApplyAllSettings();
+});
+
+document.getElementById('npSetColorBg').addEventListener('input', function(){ npSetSave('colorBg', this.value); npApplyAllSettings(); });
+document.getElementById('npSetColorCard').addEventListener('input', function(){ npSetSave('colorCard', this.value); npApplyAllSettings(); });
+document.getElementById('npSetColorBorder').addEventListener('input', function(){ npSetSave('colorBorder', this.value); npApplyAllSettings(); });
+document.getElementById('npSetColorTextSec').addEventListener('input', function(){ npSetSave('colorTextSec', this.value); npApplyAllSettings(); });
+document.getElementById('npSetColorAccent').addEventListener('input', function(){ npSetSave('colorAccent', this.value); npApplyAllSettings(); });
+document.getElementById('npSetColorsReset').addEventListener('click', function(){
+  ['colorBg','colorCard','colorBorder','colorTextSec'].forEach(function(k){ npSetSave(k, ''); });
+  npSetSave('colorAccent', NP_SET_DEFAULTS.colorAccent);
+  npApplyAllSettings();
+});
+
+document.getElementById('npSetTsToggle').addEventListener('click', function(){
+  npTsEnabled = !npTsEnabled;
   applyTsBrightness();
 });
-document.getElementById('npTsBrightDown').addEventListener('click', function(){
-  npTsBrightness = Math.max(0, npTsBrightness - 5);
-  applyTsBrightness();
+document.getElementById('npSetTsColor').addEventListener('input', function(){ npSetSave('tsColor', this.value); npApplyAllSettings(); });
+document.getElementById('npSetTsBrightUp').addEventListener('click', function(){ npTsBrightness = Math.min(100, npTsBrightness + 5); applyTsBrightness(); });
+document.getElementById('npSetTsBrightDown').addEventListener('click', function(){ npTsBrightness = Math.max(0, npTsBrightness - 5); applyTsBrightness(); });
+
+document.getElementById('npSetRowGuideColor').addEventListener('input', function(){ npSetSave('rowGuide', this.value); npApplyAllSettings(); });
+
+document.getElementById('npSetAllReset').addEventListener('click', function(){
+  npFontSize = 16; applyFontSize();
+  npTsBrightness = 25; npTsEnabled = true; applyTsBrightness();
+  Object.keys(NP_SET_KEYS).forEach(function(k){ npSetSave(k, k === 'colorAccent' || k === 'tsColor' || k === 'rowGuide' ? NP_SET_DEFAULTS[k] : ''); });
+  npApplyAllSettings();
 });
-document.getElementById('npTsBrightValue').addEventListener('change', function(){
-  var v = parseInt(this.value);
-  npTsBrightness = isNaN(v) ? npTsBrightness : v;
-  applyTsBrightness();
+
+var npSettingsOverlay = document.getElementById('npSettingsOverlay');
+document.getElementById('npSettingsBtn').addEventListener('click', function(){
+  npApplyAllSettings();
+  npSettingsOverlay.style.display = 'flex';
 });
+document.getElementById('npSettingsClose').addEventListener('click', function(){ npSettingsOverlay.style.display = 'none'; });
+npSettingsOverlay.addEventListener('click', function(e){ if(e.target === npSettingsOverlay){ npSettingsOverlay.style.display = 'none'; } });
 
 function buildExportText(){
   var lines = npInput.value.split('\n');
