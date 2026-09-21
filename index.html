@@ -739,7 +739,7 @@ function applyCsvRecordToText(record){
   var lines = npInput.value.split('\n');
   var changed = false;
   var newLines = lines.map(function(line, i){
-    var m = line.match(/^(\s*)(`?)([A-Za-z_][A-Za-z0-9_]*)(\s*)=(\s*)(.*)$/);
+    var m = line.match(/^(\s*)([`@]?)([A-Za-z_][A-Za-z0-9_]*)(\s*)=(\s*)(.*)$/);
     if(m){
       var varName = m[3];
       var col = npLineLinks['var:' + varName];
@@ -1231,7 +1231,7 @@ function evaluateNotepad(text){
       return (prevLineValues && prevLineValues[refIdx] !== undefined) ? prevLineValues[refIdx] : 0;
     }
     var work = trimmed.replace(/=+\s*$/, '').trim();
-    var assignMatch = work.match(/^(`)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.+)$/);
+    var assignMatch = work.match(/^([`@])?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.+)$/);
     var exprText, varName = null, selfUpdateName = null, isConstDecl = false;
     if(assignMatch){
       isConstDecl = !!assignMatch[1];
@@ -1262,8 +1262,9 @@ function evaluateNotepad(text){
       }
     }
 
-    // "`name = expr" declares name as a constant: any later EXPLICIT write to
-    // that name -- "name = ...", "`name = ...", or "name += ..." -- is
+    // "`name = expr" or "@name = expr" declares name as a constant: any later
+    // EXPLICIT write to that name -- "name = ...", "`name = ..."/"@name = ...",
+    // or "name += ..." -- is
     // blocked instead of silently overwriting it. A bare reference with no
     // "=" at all (e.g. just "name*5" on its own line) is always read-only
     // and is never blocked, constant or not -- see the selfMatch guard above,
@@ -1521,7 +1522,7 @@ function renderNotepad(){
 
     var linkChip = '';
     if(npCsvHeaders.length && trimmedLine){
-      var lineMatch = rawLine.match(/^\s*`?([A-Za-z_][A-Za-z0-9_]*)\s*=/);
+      var lineMatch = rawLine.match(/^\s*[`@]?([A-Za-z_][A-Za-z0-9_]*)\s*=/);
       var linkKey = lineMatch ? ('var:' + lineMatch[1]) : ('line:' + i);
       var linkedCol = npLineLinks[linkKey];
       var chipClass = linkedCol ? 'ov-link-chip linked' : 'ov-link-chip';
@@ -2024,7 +2025,7 @@ document.getElementById('npCsvFromText').addEventListener('click', function(){
 
   var existingVarNames = [];
   npInput.value.split('\n').forEach(function(line){
-    var m = line.match(/^\s*`?([A-Za-z_][A-Za-z0-9_]*)\s*=/);
+    var m = line.match(/^\s*[`@]?([A-Za-z_][A-Za-z0-9_]*)\s*=/);
     if(m){ existingVarNames.push(m[1]); }
   });
   npCsvHeaders.forEach(function(col){
@@ -2123,7 +2124,7 @@ npCsvFile.addEventListener('change', function(){
 
     var existingVarNames = [];
     npInput.value.split('\n').forEach(function(line){
-      var m = line.match(/^\s*`?([A-Za-z_][A-Za-z0-9_]*)\s*=/);
+      var m = line.match(/^\s*[`@]?([A-Za-z_][A-Za-z0-9_]*)\s*=/);
       if(m){ existingVarNames.push(m[1]); }
     });
     npCsvHeaders.forEach(function(col){
